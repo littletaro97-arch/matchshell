@@ -6,9 +6,13 @@ import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.text.InputType
 import android.util.Log
 import android.view.MotionEvent
@@ -53,6 +57,22 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var productionHost: String
 
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var timeoutRunnable: Runnable? = null
+    private var retryCount = 0
+    private var autoRetryPending = false
+    private var lastFailedUrl: String? = null
+
+    private val connectivityManager by lazy {
+        getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+    }
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            mainHandler.post { maybeAutoRetry() }
+        }
+    }
+
     private val fileChooser =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val callback = fileCallback ?: return@registerForActivityResult
@@ -79,9 +99,16 @@ class MainActivity : ComponentActivity() {
         configureWebView()
         applyInsets(fab)
 
-        findViewById<Button>(R.id.retry_button).setOnClickListener { web.loadUrl(currentUrl()) }
+        findViewById<Button>(R.id.retry_button).setOnClickListener {
+            retryCount = 0
+            cancelAutoRetry()
+            web.stopLoading()
+            web.loadUrl(currentUrl())
+        }
         fab.setOnClickListener { web.reload() }
         fab.setOnLongClickListener { showUrlDialog(); true }
+
+        connectivityManager.registerDefaultNetworkCallback(networkCallback)
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -112,6 +139,9 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        cancelPageTimeout()
+        cancelAutoRetry()
+        runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
         web.destroy()
         super.onDestroy()
     }
@@ -214,7 +244,82 @@ class MainActivity : ComponentActivity() {
 
     private fun openExternal(uri: Uri) {
         runCatching { startActivity(Intent(Intent.ACTION_VIEW, uri)) }
-            .onFailure { Toast.makeText(this, R.string.error_template, Toast.LENGTH_SHORT).show() }
+            .onFailure {
+                Toast.makeText(
+                    this,
+                    getString(R.string.error_template, it.message ?: getString(R.string.error_unknown)),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+    }
+
+    // --- 加载超时 / 网络恢复自动重试 ---
+
+    private fun startPageTimeout(url: String) {
+        if (isDestroyed || isFinishing) return
+        cancelPageTimeout()
+        timeoutRunnable = Runnable { onPageTimeout(url) }
+        mainHandler.postDelayed(timeoutRunnable!!, PAGE_TIMEOUT_MS)
+    }
+
+    private fun cancelPageTimeout() {
+        timeoutRunnable?.let { mainHandler.removeCallbacks(it); timeoutRunnable = null }
+    }
+
+    private fun onPageTimeout(url: String) {
+        if (isDestroyed || isFinishing) return
+        if (errorView.visibility == View.VISIBLE) return
+        lastFailedUrl = url
+        showError(getString(R.string.error_timeout), url)
+        if (retryCount < MAX_AUTO_RETRY) maybeAutoRetry()
+    }
+
+    private fun showError(message: String, url: String? = null) {
+        val detail = url?.let { "\n\n$it" } ?: ""
+        errorText.text = "$message$detail"
+        errorView.visibility = View.VISIBLE
+    }
+
+    private fun hideError() {
+        errorView.visibility = View.GONE
+        retryCount = 0
+        lastFailedUrl = null
+    }
+
+    private fun maybeAutoRetry() {
+        if (isDestroyed || isFinishing) return
+        if (errorView.visibility != View.VISIBLE) return
+        if (retryCount >= MAX_AUTO_RETRY) return
+        if (autoRetryPending) return
+        autoRetryPending = true
+        errorText.text = getString(R.string.error_retrying, retryCount + 1, MAX_AUTO_RETRY)
+        mainHandler.postDelayed({
+            autoRetryPending = false
+            if (isDestroyed || isFinishing) return@postDelayed
+            if (errorView.visibility == View.VISIBLE && retryCount < MAX_AUTO_RETRY) {
+                doAutoRetry()
+            }
+        }, AUTO_RETRY_DELAY_MS)
+    }
+
+    private fun cancelAutoRetry() {
+        autoRetryPending = false
+        mainHandler.removeCallbacksAndMessages(null)
+    }
+
+    private fun doAutoRetry() {
+        retryCount++
+        web.stopLoading()
+        web.loadUrl(currentUrl())
+    }
+
+    private fun describeError(error: WebResourceError): String {
+        return when (error.errorCode) {
+            WebViewClient.ERROR_HOST_LOOKUP -> getString(R.string.error_host_lookup)
+            WebViewClient.ERROR_CONNECT -> getString(R.string.error_connect)
+            WebViewClient.ERROR_TIMEOUT -> getString(R.string.error_timeout)
+            else -> error.description?.toString() ?: getString(R.string.error_unknown)
+        }
     }
 
     private fun currentUrl(): String =
@@ -362,11 +467,13 @@ class MainActivity : ComponentActivity() {
 
         override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
             if (BuildConfig.DEBUG) Log.d(TAG, "WV PGSTART $url")
+            startPageTimeout(url)
         }
 
         override fun onPageFinished(view: WebView, url: String) {
             if (BuildConfig.DEBUG) Log.d(TAG, "WV PGFIN   $url")
-            errorView.visibility = View.GONE
+            cancelPageTimeout()
+            hideError()
         }
 
         override fun onReceivedError(
@@ -378,8 +485,10 @@ class MainActivity : ComponentActivity() {
                 Log.d(TAG, "WV ERR ${request.url} code=${error.errorCode} desc=${error.description}")
             }
             if (!request.isForMainFrame) return
-            errorText.text = getString(R.string.error_template, error.description)
-            errorView.visibility = View.VISIBLE
+            cancelPageTimeout()
+            lastFailedUrl = request.url.toString()
+            showError(getString(R.string.error_template, describeError(error)))
+            if (retryCount < MAX_AUTO_RETRY) maybeAutoRetry()
         }
     }
 
@@ -418,5 +527,9 @@ class MainActivity : ComponentActivity() {
         const val KEY_URL = "url"
         const val KEY_URL_HISTORY = "url_history"
         const val MAX_HISTORY_SIZE = 5
+
+        const val PAGE_TIMEOUT_MS = 15_000L
+        const val MAX_AUTO_RETRY = 3
+        const val AUTO_RETRY_DELAY_MS = 1_500L
     }
 }
