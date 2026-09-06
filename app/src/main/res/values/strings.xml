@@ -8,6 +8,7 @@
     <string name="reload">刷新</string>
     <string name="retry">重试</string>
     <string name="download_started">已开始下载，见通知栏</string>
+    <string name="download_no_notification_permission">未授予通知权限，下载仍会进行，但可能不会显示完成通知</string>
 
     <string name="error_template">%1$s\n\n确认服务器在运行，或长按右下角「刷新」改地址。</string>
     <string name="error_timeout">加载超时：服务器没有响应。</string>

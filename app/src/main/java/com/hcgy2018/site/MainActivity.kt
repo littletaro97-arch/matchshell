@@ -1,18 +1,22 @@
 package com.hcgy2018.site
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.AlertDialog
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import android.text.InputType
 import android.util.Log
 import android.view.MotionEvent
@@ -41,7 +45,6 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.view.updateLayoutParams
 import androidx.core.view.updatePadding
-import java.net.URLDecoder
 
 class MainActivity : ComponentActivity() {
 
@@ -52,6 +55,18 @@ class MainActivity : ComponentActivity() {
     private lateinit var errorText: TextView
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var pendingDownload: PendingDownload? = null
+
+    private val notificationPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            pendingDownload?.let { info ->
+                pendingDownload = null
+                if (!granted) {
+                    Toast.makeText(this, R.string.download_no_notification_permission, Toast.LENGTH_LONG).show()
+                }
+                doDownload(info.url, info.disposition, info.mimeType)
+            }
+        }
 
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
 
@@ -223,30 +238,31 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun download(url: String, disposition: String?, mimeType: String?) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            pendingDownload = PendingDownload(url, disposition, mimeType)
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            return
+        }
+        doDownload(url, disposition, mimeType)
+    }
+
+    private fun doDownload(url: String, disposition: String?, mimeType: String?) {
+        val fileName = URLUtil.guessFileName(url, disposition, mimeType)
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             val cookie = CookieManager.getInstance().getCookie(url)
             if (!cookie.isNullOrBlank()) addRequestHeader("Cookie", cookie)
             addRequestHeader("User-Agent", web.settings.userAgentString)
             setMimeType(mimeType)
-            setDestinationInExternalPublicDir(
-                Environment.DIRECTORY_DOWNLOADS,
-                guessFileName(url, disposition)
-            )
+            setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, fileName)
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
         }
         val manager = getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         runCatching { manager.enqueue(request) }
             .onSuccess { Toast.makeText(this, R.string.download_started, Toast.LENGTH_SHORT).show() }
             .onFailure { openExternal(Uri.parse(url)) }
-    }
-
-    private fun guessFileName(url: String, disposition: String?): String {
-        val fromHeader = disposition
-            ?.let { Regex("filename\\*?=\"?([^\";]+)\"?", RegexOption.IGNORE_CASE).find(it) }
-            ?.groupValues?.getOrNull(1)?.trim()
-            ?.let { if (it.startsWith("UTF-8''", ignoreCase = true)) it.substring(7) else it }
-            ?.let { runCatching { URLDecoder.decode(it, "UTF-8") }.getOrElse { _ -> it } }
-        return fromHeader?.takeIf { it.isNotBlank() } ?: URLUtil.guessFileName(url, null, null)
     }
 
     private fun collectUris(data: Intent?): Array<Uri>? {
@@ -536,6 +552,12 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private data class PendingDownload(
+        val url: String,
+        val disposition: String?,
+        val mimeType: String?
+    )
 
     private companion object {
         const val PREFS = "shell"
