@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 生产域名强制 HTTPS，不允许明文 -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">hcgy2018.site</domain>
+    </domain-config>
+</network-security-config>

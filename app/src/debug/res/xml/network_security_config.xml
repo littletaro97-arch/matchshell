@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- debug 包允许所有明文 HTTP，便于局域网联调 -->
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

@@ -1,0 +1,34 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Kotlin
+.kotlin/
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+*.ipr
+*.iws
+local.properties
+
+# Keystores - NEVER commit signing keys
+*.jks
+*.keystore
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Captures / logs
+captures/
+*.log
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Docs assets that can be regenerated (optional, keep if source)
+# docs_fix_after.png

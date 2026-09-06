@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">火柴公益</string>
+
+    <!-- 默认打开的网址。安装后长按右下角「刷新」按钮可随时改。 -->
+    <string name="default_url">https://hcgy2018.site/</string>
+
+    <string name="reload">刷新</string>
+    <string name="retry">重试</string>
+    <string name="download_started">已开始下载，见通知栏</string>
+
+    <string name="error_template">加载失败：%1$s\n\n确认服务器在运行，或长按右下角「刷新」改地址。</string>
+
+    <string name="prompt_url_title">调试地址</string>
+    <string name="prompt_url_message">输入要打开的网址。局域网调试示例：http://192.168.1.20:8765/</string>
+
+    <!-- 生产域名。调试模式下，页面内的生产域名链接会被重定向到当前调试地址。 -->
+    <string name="production_host">hcgy2018.site</string>
+    <string name="url_changed">已切换到 %1$s</string>
+    <string name="url_invalid">地址格式不正确</string>
+    <string name="url_history_manual">手动输入…</string>
+</resources>
