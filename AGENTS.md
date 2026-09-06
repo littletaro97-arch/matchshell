@@ -150,7 +150,7 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 
 ## 已实现的壳能力
 
-- 沉浸式全屏（状态栏/导航栏隐藏，内容延伸至刘海/挖孔/手势区域）
+- 沉浸式全屏（状态栏/导航栏隐藏，内容延伸至刘海/挖孔/手势区域；在华为/荣耀等 OEM 上额外加 `FLAG_FULLSCREEN` + `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` 兜底）
 - 长按改 URL，支持最近 5 条历史地址（SharedPreferences 持久化）
 - 系统返回键：优先网站 JS 处理器，否则 `webView.goBack()` / `finish()`
 - 同 host 留 WebView，跳 host 用外部浏览器

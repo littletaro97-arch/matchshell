@@ -21,6 +21,7 @@ import android.text.InputType
 import android.util.Log
 import android.view.MotionEvent
 import android.view.View
+import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
@@ -233,10 +234,29 @@ class MainActivity : ComponentActivity() {
 
     private fun applyInsets(fab: View) {
         // 默认隐藏系统栏，实现真正的全屏；用户从顶部/底部滑入可临时显示
+        window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN)
+
         val insetsController = WindowCompat.getInsetsController(window, window.decorView)
         insetsController.hide(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
         insetsController.systemBarsBehavior =
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+        // 部分 OEM（如华为/荣耀）仅靠 WindowInsetsController 不够，需要旧版 flags 兜底
+        @Suppress("DEPRECATION")
+        window.decorView.systemUiVisibility = (
+            View.SYSTEM_UI_FLAG_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+            )
+
+        // 允许内容延伸到刘海/挖孔区域
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            window.attributes.layoutInDisplayCutoutMode =
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+        }
 
         // 只拿 insets 来调整 reload_fab 的边距，避免被手势导航条/状态栏压住。
         // 不再给根容器加 padding：全屏模式下网站内容应延伸至刘海/挖孔/手势区域。
