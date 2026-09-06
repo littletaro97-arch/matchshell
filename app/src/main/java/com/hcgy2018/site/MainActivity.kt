@@ -155,13 +155,28 @@ class MainActivity : ComponentActivity() {
             // 网站已提供 viewport meta；概览缩放会把平板误带入宽桌面布局，
             // 造成比例压缩，并与资源页的 900px 响应式分支冲突。
             loadWithOverviewMode = false
-            builtInZoomControls = true
-            displayZoomControls = false
-            mediaPlaybackRequiresUserGesture = false
-            mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-            allowFileAccess = true
-            allowContentAccess = true
             setSupportMultipleWindows(false)
+
+            if (BuildConfig.DEBUG) {
+                // debug 保留缩放与自动播放，方便真机调试
+                setSupportZoom(true)
+                builtInZoomControls = true
+                displayZoomControls = false
+                mediaPlaybackRequiresUserGesture = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                allowFileAccess = true
+                allowContentAccess = true
+            } else {
+                // release 收紧权限与行为
+                setSupportZoom(false)
+                builtInZoomControls = false
+                displayZoomControls = false
+                mediaPlaybackRequiresUserGesture = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
+                allowFileAccess = false
+                allowContentAccess = false
+            }
+            setGeolocationEnabled(false)
         }
         web.webViewClient = ShellWebViewClient()
         web.webChromeClient = ShellChromeClient()
