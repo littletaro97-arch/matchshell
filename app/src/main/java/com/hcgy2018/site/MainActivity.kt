@@ -206,6 +206,12 @@ class MainActivity : ComponentActivity() {
                 allowContentAccess = false
             }
             setGeolocationEnabled(false)
+
+            // 安全：不保存表单密码；登录态应由网站通过 cookie/token/session 自行管理
+            @Suppress("DEPRECATION")
+            savePassword = false
+            @Suppress("DEPRECATION")
+            saveFormData = false
         }
         web.webViewClient = ShellWebViewClient()
         web.webChromeClient = ShellChromeClient()
@@ -286,6 +292,15 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun doDownload(url: String, disposition: String?, mimeType: String?) {
+        // 游客预览 PDF 时不应自动下载到本地。
+        // 只要网站没显式要求下载（Content-Disposition 不是 attachment），
+        // 遇到 PDF 就交给系统浏览器/ PDF 查看器处理。
+        val isAttachment = disposition?.contains("attachment", ignoreCase = true) == true
+        if (!isAttachment && (mimeType == "application/pdf" || url.endsWith(".pdf", ignoreCase = true))) {
+            openPdf(url)
+            return
+        }
+
         val fileName = URLUtil.guessFileName(url, disposition, mimeType)
         val request = DownloadManager.Request(Uri.parse(url)).apply {
             val cookie = CookieManager.getInstance().getCookie(url)
@@ -317,6 +332,19 @@ class MainActivity : ComponentActivity() {
                     getString(R.string.error_template, it.message ?: getString(R.string.error_unknown)),
                     Toast.LENGTH_SHORT
                 ).show()
+            }
+    }
+
+    private fun openPdf(url: String) {
+        val uri = Uri.parse(url)
+        val intent = Intent(Intent.ACTION_VIEW, uri).apply {
+            setDataAndType(uri, "application/pdf")
+            addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
+        }
+        runCatching { startActivity(intent) }
+            .onFailure {
+                // 没有 PDF 查看器时回退到浏览器，浏览器通常会内嵌预览而非下载
+                openExternal(uri)
             }
     }
 
