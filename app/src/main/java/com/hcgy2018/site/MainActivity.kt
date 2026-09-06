@@ -541,6 +541,8 @@ class MainActivity : ComponentActivity() {
             if (BuildConfig.DEBUG) Log.d(TAG, "WV PGFIN   $url")
             cancelPageTimeout()
             hideError()
+            // 移除 WebView 默认的蓝色点击高亮，让体验更接近原生 APP
+            view.evaluateJavascript(DISABLE_TAP_HIGHLIGHT, null)
         }
 
         override fun onReceivedError(
@@ -637,5 +639,14 @@ class MainActivity : ComponentActivity() {
         const val PAGE_TIMEOUT_MS = 15_000L
         const val MAX_AUTO_RETRY = 3
         const val AUTO_RETRY_DELAY_MS = 1_500L
+
+        // 注入 CSS 禁用 WebView 默认的蓝色点击高亮
+        private const val DISABLE_TAP_HIGHLIGHT = """
+            (function(){
+                var s=document.createElement('style');
+                s.textContent='*{-webkit-tap-highlight-color:transparent!important;}';
+                document.head.appendChild(s);
+            })();
+        """
     }
 }
