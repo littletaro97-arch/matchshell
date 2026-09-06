@@ -85,17 +85,18 @@ MatchShell 是一个**极简 Android WebView 壳**：用原生 Kotlin 搭一个�
 
 ## 三、中优先级：体验、稳定、可维护
 
-### 5. WebView 配置还有残留调试配置
+### 5. WebView 配置还有残留调试配置（已修复）
 
 ```kotlin
-builtInZoomControls = true          // 用户双指缩放网页，会暴露"这只是个网页"
-displayZoomControls = false         // 没完全禁止，只是隐藏了按钮
-mediaPlaybackRequiresUserGesture = false  // 为了省事关了，生产环境容易出 autoplay 争议
+setSupportZoom(false)
+builtInZoomControls = false
+mediaPlaybackRequiresUserGesture = true  // release
 ```
 
-**建议**：
-- 评估是否需要保留缩放。如果网站本身就是响应式设计，建议 `builtInZoomControls = false`，让体验更接近原生 APP。
-- `mediaPlaybackRequiresUserGesture` 在 release 下恢复为 `true`，避免后台音频/视频自动播放被应用商店拒审。
+**状态**：
+- 缩放已彻底关闭，双指/双击缩放都不会触发。
+- release 下 `mediaPlaybackRequiresUserGesture` 恢复为 `true`，避免后台音频/视频自动播放被应用商店拒审。
+- debug 下仍保留自动播放与文件访问，方便局域网调试。
 
 ### 6. 错误页/白屏处理太粗糙
 

@@ -186,20 +186,19 @@ class MainActivity : ComponentActivity() {
             loadWithOverviewMode = false
             setSupportMultipleWindows(false)
 
+            // 产品体验上不允许用户手动缩放；所有缩放入口统一关闭
+            setSupportZoom(false)
+            builtInZoomControls = false
+            displayZoomControls = false
+
             if (BuildConfig.DEBUG) {
-                // debug 保留缩放与自动播放，方便真机调试
-                setSupportZoom(true)
-                builtInZoomControls = true
-                displayZoomControls = false
+                // debug 保留自动播放与文件访问，方便真机调试
                 mediaPlaybackRequiresUserGesture = false
                 mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                 allowFileAccess = true
                 allowContentAccess = true
             } else {
                 // release 收紧权限与行为
-                setSupportZoom(false)
-                builtInZoomControls = false
-                displayZoomControls = false
                 mediaPlaybackRequiresUserGesture = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
                 allowFileAccess = false
