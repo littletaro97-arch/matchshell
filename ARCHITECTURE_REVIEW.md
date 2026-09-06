@@ -67,19 +67,16 @@ MatchShell 是一个**极简 Android WebView 壳**：用原生 Kotlin 搭一个�
   ```
 - 至少做一次 `assembleRelease` 并验证 APK 能被系统安装，不要等到要发版那天才发现问题。
 
-### 4. 图标资源：只在 API 26+ 上"看起来正常"
+### 4. 图标资源（已修复）
 
-当前只有 `mipmap-anydpi-v26/ic_launcher.xml` 和 `ic_launcher_round.xml`，依赖自适应图标。
+**修复内容**：
+- `ic_launcher_foreground.png` 已按 Android 自适应图标 66dp 安全区重新生成，Logo 直径从 108dp 缩到 66dp，四周留出足够边距，不再顶边。
+- 移除了原先二次缩放的 `ic_launcher_foreground_inset.xml`，避免不同 launcher 对 inset 的处理不一致。
+- 补齐 `mipmap-mdpi` 到 `mipmap-xxxhdpi` 的方形/圆形 fallback PNG。
 
-**问题**：
-- Android 8.0 以下设备会拿不到图标，系统回退行为不可控。
-- `ic_launcher_foreground.png` 是一个带透明底 PNG，直接当单色层（monochrome）用。**颜色会全部变成单一颜色 + 透明度**，现在这个 Logo 有红色、黄色、白色，单色化后可能成一团灰雾。
-- 缺少按密度分发的 PNG：`mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi`。
-
-**建议**：
-- 补上 `mipmap-mdpi` 到 `mipmap-xxxhdpi` 的 PNG（纯色背景 + Logo 居中）。
-- 如果要做单色图标，单独做一份只有轮廓线的矢量/PNG，不要把彩色 Logo 直接当 monochrome。
-- 启动页 splash 也建议补一个（哪怕只是 Logo + 背景色的静态 Activity），避免 WebView 白屏前用户以为卡死。
+**仍待后续处理**：
+- `monochrome` 目前仍复用彩色前景，在 Android 13+ themed icon 模式下会变成单色剪影。如果需要精致的主题图标，应单独绘制一份只有 Logo 轮廓的矢量/PNG。
+- 启动页 splash 还没做，WebView 白屏前用户可能以为卡死。
 
 ---
 
