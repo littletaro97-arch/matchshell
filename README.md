@@ -24,20 +24,41 @@ export ANDROID_HOME="C:/Users/LittleTaro/AppData/Local/Android/Sdk"
 GRADLE_BIN="C:/Users/LittleTaro/.gradle/wrapper/dists/gradle-8.11.1-bin/bpt9gzteqjrbo1mjrsomdt32c/gradle-8.11.1/bin/gradle"
 "$GRADLE_BIN" assembleDebug        # 第一次联网拉几个缺失的小 jar，之后可加 --offline
 "$GRADLE_BIN" assembleRelease      # release 包已签名（临时密钥），发版前需替换
+"$GRADLE_BIN" lintDebug            # 静态检查
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 环境：JDK 21、Android SDK（build-tools 37 / platform 36）已在 `C:\Users\LittleTaro\AppData\Local\Android\Sdk`。
+
+每次完成一个功能都会提交到 Git；回滚用 `git log` + `git checkout`。
 
 ## 用法
 
 | 操作 | 效果 |
 |---|---|
 | 点右下角半透明「刷新」 | 重新加载当前页 |
-| **长按**「刷新」 | 弹出输入框改网址，存起来下次生效 |
-| 返回键 | 网页内后退；已在首页才退出 APP |
+| **长按**「刷新」 | 弹出最近 5 条调试地址，点击直接加载；选「手动输入…」可新增地址 |
+| 返回键 | 网页内后退；若网站通过 `MatchShell.setBackHandler` 注册处理器，优先由网站决定 |
+| 下载文件 | Android 13+ 会先申请通知权限；中文文件名使用 `filename*` 解码 |
 
-改网址是核心用法：局域网调试时填 `http://192.168.x.x:8765/`，正式站填 `https://hcgy2018.site/`。
+改网址是核心用法：局域网调试时填 `http://192.168.x.x:8880/`，正式站填 `https://hcgy2018.site/`。
+
+### JS 桥接（网站侧）
+
+```javascript
+// 注册一个返回键处理函数
+window.MatchShell.setBackHandler('onMatchShellBack');
+
+window.onMatchShellBack = function() {
+    if (当前弹窗打开) {
+        关闭弹窗();
+        return true;   // 消费返回键，APP 不退出
+    }
+    return false;      // APP 继续走 canGoBack / 退出
+};
+```
+
+也可调用 `window.MatchShell.finishApp()` 主动退出、`window.MatchShell.reload()` 刷新。
 
 ## 为什么不用 PWA
 
@@ -59,8 +80,13 @@ manifest 不生效，装不上，也就没有 standalone 全屏。调试主要�
    WebView 的滚动位置和页面状态不丢。
 6. **远程调试** — `BuildConfig.DEBUG` 下开 `WebView.setWebContentsDebuggingEnabled(true)`，
    电脑上打开 `chrome://inspect` 就能审查手机里的页面元素。
-7. **系统栏遮挡** — targetSdk 35 强制 edge-to-edge，已按 `systemBars + ime` 的 insets 给
-   WebView 加上下 padding，否则网站顶部 65px 的 sticky header 会被状态栏压住。
+7. **系统栏遮挡** — 默认隐藏状态栏和导航栏，内容延伸至刘海/挖孔/手势区域；
+   只调整右下角刷新按钮的边距，避免被手势条压住。
+8. **加载白屏** — 主文档 15 秒未完成视为超时，按错误码给出具体提示；
+   网络恢复时自动重试，最多 3 次；手动重试会清零计数。
+9. **本地调试硬编码链接** — 页面内写死的 `https://hcgy2018.site/...` 链接，
+   在调试地址下会被自动重定向到当前调试服务器。
+10. **下载通知权限** — Android 13+ 先申请 `POST_NOTIFICATIONS`；被拒绝仍继续下载并提示用户。
 
 ## 服务端这边要注意
 

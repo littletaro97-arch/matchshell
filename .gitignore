@@ -25,6 +25,9 @@ Thumbs.db
 captures/
 *.log
 
+# Distribution APKs (built on demand, do not commit)
+dist/
+
 # Temporary files
 *.tmp
 *.swp

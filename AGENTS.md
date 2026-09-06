@@ -6,6 +6,7 @@
 
 ## 位置
 - 工程根：`E:\课外项目\matchshell\`
+- Git 仓库：已初始化，当前分支 `main`
 - APK 产物：`E:\课外项目\matchshell\app\build\outputs\apk\debug\app-debug.apk` / `...\release\app-release.apk`
 - 包名：`com.hcgy2018.site`
 - 主 Activity：`com.hcgy2018.site.MainActivity`
@@ -25,15 +26,24 @@
 - 沉浸式全屏（`WindowCompat.setDecorFitsSystemWindows(window, false)` + insets 监听）
 - `applyInsets()`：默认隐藏状态栏和导航栏，内容延伸至刘海/挖孔/手势区域；用户从顶部/底部滑入可临时显示系统栏；只调整 reload_fab 边距，不再给根容器加 padding
 - 长按右下角浮窗 → 弹出最近 5 条历史地址列表，可点击直接加载；选择"手动输入…"进入编辑对话框（自动识别局域网地址补 `http://`，其他补 `https://`），存 SharedPreferences，保存后 Toast 提示新地址
-- `OnBackPressedCallback` → `webView.canGoBack()` 决定 `goBack()` 或 `finish()`
+- `OnBackPressedCallback`：优先调用网站注册的 JS 返回键处理器（`window.MatchShell.setBackHandler`）；未注册或返回 false 时，按 `webView.canGoBack()` 决定 `goBack()` 或 `finish()`
 - `WebViewClient`：
   - `shouldOverrideUrlLoading`：非 http(s) scheme 跳外部浏览器；与当前地址同 host 在 WebView 内打开；目标为生产域名 `hcgy2018.site` 且当前处于调试地址时，自动重定向到调试地址，避免本地调试时页面硬编码生产链接跳浏览器
   - `onPageStarted` / `onPageFinished` / `onReceivedError`（诊断日志）
+  - 主文档加载 15 秒未完成视为超时；错误页按错误码区分：域名解析 / 连接失败 / 超时 / 未知
+- 网络恢复监听（`ConnectivityManager.NetworkCallback`）：错误页状态下网络可用时自动重试，最多 3 次；手动重试会清零计数
 - `WebChromeClient.onShowFileChooser` → `registerForActivityResult(StartActivityForResult)` + 多选
-- `setDownloadListener` → `DownloadManager`，自动注入 `CookieManager` cookie + 解析 RFC 5987 中文文件名
+- `setDownloadListener` → `DownloadManager`
+  - Android 13+ 先申请 `POST_NOTIFICATIONS`，被拒绝仍继续下载
+  - 自动注入 `CookieManager` cookie
+  - 文件名解析使用 `URLUtil.guessFileName(url, disposition, mimeType)`，框架统一处理 `filename` / `filename*` / RFC 5987 中文
 - `dispatchTouchEvent` 钩子打日志（log tag `matchshell-touch`，仅 `BuildConfig.DEBUG`）
 - `web.setOnTouchListener` 打日志（不消费事件）
 - `BuildConfig.DEBUG` 下 `WebView.setWebContentsDebuggingEnabled(true)`
+- JS 桥接 `window.MatchShell`：
+  - `MatchShell.setBackHandler(name)`：网站注册全局返回键处理函数，返回 true 表示消费返回键
+  - `MatchShell.finishApp()`：退出 APP
+  - `MatchShell.reload()`：刷新当前页面
 
 ### `app/src/main/res/layout/activity_main.xml`
 - `FrameLayout` 根（match_parent × match_parent，背景色 `ic_launcher_background`）
@@ -42,10 +52,11 @@
 - `Button reload_fab`（右下角，`alpha=0.45`，长按改 URL，点击 reload）
 
 ### `app/src/main/AndroidManifest.xml`（当前）
-- permission：`INTERNET`、`ACCESS_NETWORK_STATE`
+- permission：`INTERNET`、`ACCESS_NETWORK_STATE`、`POST_NOTIFICATIONS`
 - application：
-  - `usesCleartextTraffic="true"`（局域网 HTTP 调试需要）
-  - `hardwareAccelerated="false"`
+  - `usesCleartextTraffic="${usesCleartextTraffic}"`：debug 为 `true`（局域网 HTTP 调试需要），release 为 `false`
+  - `networkSecurityConfig`：`debug` 允许所有明文；`release` 仅 `hcgy2018.site` 且强制 HTTPS
+  - `hardwareAccelerated="true"`
   - `theme="@style/Theme.MatchShell"`
 - activity `.MainActivity`：
   - `launchMode="singleTop"`
@@ -74,6 +85,9 @@ export ANDROID_HOME="C:/Users/LittleTaro/AppData/Local/Android/Sdk"
 export GRADLE_USER_HOME="C:/Users/LittleTaro/.gradle"
 GRADLE_BIN="C:/Users/LittleTaro/.gradle/wrapper/dists/gradle-8.11.1-bin/bpt9gzteqjrbo1mjrsomdt32c/gradle-8.11.1/bin/gradle"
 "$GRADLE_BIN" assembleDebug
+
+# release（临时签名，不能发版）
+"$GRADLE_BIN" assembleRelease
 ```
 
 第一次联网会拉几个缺失的小 jar；之后可加 `--offline`。
@@ -136,13 +150,14 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 
 ## 已实现的壳能力
 
-- 沉浸式全屏（状态栏/导航栏透明 + padding 给外层）
-- 长按改 URL（SharedPreferences 持久化）
-- 系统返回键 → `webView.goBack()`
+- 沉浸式全屏（状态栏/导航栏隐藏，内容延伸至刘海/挖孔/手势区域）
+- 长按改 URL，支持最近 5 条历史地址（SharedPreferences 持久化）
+- 系统返回键：优先网站 JS 处理器，否则 `webView.goBack()` / `finish()`
 - 同 host 留 WebView，跳 host 用外部浏览器
+- 本地调试时自动把页面内 `hcgy2018.site` 硬编码链接重定向到当前调试地址
 - `onShowFileChooser` 文件多选上传
-- `DownloadManager` 下载（带 cookie + RFC 5987 中文文件名）
-- 加载失败错误页 + 重试按钮
+- `DownloadManager` 下载（Android 13+ 通知权限 + cookie + RFC 5987 中文文件名）
+- 加载超时 / 错误分类 / 网络恢复自动重试（最多 3 次）
 - `BuildConfig.DEBUG` 下开启 WebView 远程调试（`chrome://inspect`）
 - 旋转不重建 Activity（manifest `configChanges`）
 - 触摸全链路诊断日志（`ACT` / `WV` / `WV LOAD` / `WV PGSTART` / `WV PGFIN` / `WV ERR`）
