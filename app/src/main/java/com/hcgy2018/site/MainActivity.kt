@@ -24,6 +24,7 @@ import android.view.View
 import android.webkit.CookieManager
 import android.webkit.URLUtil
 import android.webkit.ValueCallback
+import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
@@ -56,6 +57,7 @@ class MainActivity : ComponentActivity() {
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingDownload: PendingDownload? = null
+    private val appBridge = AppBridge(this)
 
     private val notificationPermissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -127,6 +129,18 @@ class MainActivity : ComponentActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                val handler = appBridge.backHandlerName
+                if (!handler.isNullOrBlank()) {
+                    web.evaluateJavascript("($handler)()") { result ->
+                        val consumed = result?.trim { it == '"' }?.toBoolean() == true
+                        if (!consumed) defaultBackAction()
+                    }
+                } else {
+                    defaultBackAction()
+                }
+            }
+
+            private fun defaultBackAction() {
                 if (web.canGoBack()) web.goBack() else finish()
             }
         })
@@ -198,6 +212,9 @@ class MainActivity : ComponentActivity() {
         web.setDownloadListener { url, _, disposition, mimeType, _ ->
             download(url, disposition, mimeType)
         }
+
+        // 暴露 JS 桥接，让网站控制返回键等行为
+        web.addJavascriptInterface(appBridge, "MatchShell")
 
         // DIAG: WebView 自己有没有收到触摸事件?
         web.setOnTouchListener { _, ev ->
@@ -558,6 +575,39 @@ class MainActivity : ComponentActivity() {
         val disposition: String?,
         val mimeType: String?
     )
+
+    /**
+     * JS 桥接。
+     * 网站可通过 window.MatchShell 与壳交互，例如设置返回键处理器。
+     */
+    class AppBridge(private val activity: MainActivity) {
+
+        @Volatile
+        var backHandlerName: String? = null
+            private set
+
+        /**
+         * 网站注册一个返回键处理器函数名。
+         * 该函数需要在全局作用域可访问，返回 true 表示消费返回键。
+         * 示例：MatchShell.setBackHandler("onMatchShellBack")
+         */
+        @JavascriptInterface
+        fun setBackHandler(name: String?) {
+            backHandlerName = name?.takeIf { it.isNotBlank() }
+        }
+
+        /** 退出 APP */
+        @JavascriptInterface
+        fun finishApp() {
+            activity.runOnUiThread { activity.finish() }
+        }
+
+        /** 刷新当前页面 */
+        @JavascriptInterface
+        fun reload() {
+            activity.runOnUiThread { activity.web.reload() }
+        }
+    }
 
     private companion object {
         const val PREFS = "shell"
