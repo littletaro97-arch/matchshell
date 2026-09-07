@@ -2,15 +2,16 @@
 <resources>
     <string name="app_name">火柴公益</string>
 
-    <!-- 默认打开的网址。安装后长按右下角「刷新」按钮可随时改。 -->
+    <!-- 默认打开的网址。安装后长按右上角「刷新」按钮可随时改。 -->
     <string name="default_url">https://hcgy2018.site/</string>
 
     <string name="reload">刷新</string>
     <string name="retry">重试</string>
+    <string name="delete">删除</string>
     <string name="download_started">已开始下载，见通知栏</string>
     <string name="download_no_notification_permission">未授予通知权限，下载仍会进行，但可能不会显示完成通知</string>
 
-    <string name="error_template">%1$s\n\n确认服务器在运行，或长按右下角「刷新」改地址。</string>
+    <string name="error_template">%1$s\n\n确认服务器在运行，或长按右上角「刷新」改地址。</string>
     <string name="error_timeout">加载超时：服务器没有响应。</string>
     <string name="error_connect">无法连接到服务器。</string>
     <string name="error_host_lookup">域名解析失败，请检查地址。</string>
@@ -25,4 +26,7 @@
     <string name="url_changed">已切换到 %1$s</string>
     <string name="url_invalid">地址格式不正确</string>
     <string name="url_history_manual">手动输入…</string>
+    <string name="url_history_delete_title">删除调试地址</string>
+    <string name="url_history_delete_message">确定要删除「%1$s」吗？</string>
+    <string name="url_history_empty_hint">暂无历史地址</string>
 </resources>

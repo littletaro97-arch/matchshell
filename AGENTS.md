@@ -127,7 +127,7 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 ## 历史 SharedPreferences 记录（实际设备需现场核对）
 - URL：`http://172.30.223.124:8765/`（用户改成的局域网地址）
 - 默认 `https://hcgy2018.site/`（在 `res/values/strings.xml` 的 `default_url`）
-- 修改入口：长按右下角 reload FAB
+- 修改入口：长按右上角 reload 按钮
 
 ## 网站项目迁移后的关联入口（2026-09-05）
 - 网站正式维护目录：`E:\火柴公益官网建设-全新架构`；契约见本项目 `UPSTREAM_CONTRACT.md`。

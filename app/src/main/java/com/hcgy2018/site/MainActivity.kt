@@ -19,8 +19,10 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import android.text.InputType
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import android.webkit.CookieManager
 import android.webkit.URLUtil
@@ -34,8 +36,10 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.EditText
+import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ListView
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -264,7 +268,7 @@ class MainActivity : ComponentActivity() {
                 WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
 
-        // 只拿 insets 来调整 reload_fab 的边距，避免被手势导航条/状态栏压住。
+        // 只拿 insets 来调整 reload_fab 的边距，避免被状态栏/刘海压住。
         // 不再给根容器加 padding：全屏模式下网站内容应延伸至刘海/挖孔/手势区域。
         val root = findViewById<View>(android.R.id.content)
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
@@ -272,7 +276,7 @@ class MainActivity : ComponentActivity() {
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
             )
             fab.updateLayoutParams<FrameLayout.LayoutParams> {
-                bottomMargin = (16 * resources.displayMetrics.density).toInt() + bars.bottom
+                topMargin = (16 * resources.displayMetrics.density).toInt() + bars.top
             }
             insets
         }
@@ -451,33 +455,70 @@ class MainActivity : ComponentActivity() {
     private fun showUrlDialog() {
         val history = getUrlHistory()
         if (history.isEmpty()) {
-            showUrlInputDialog(currentUrl())
+            showUrlInputDialog("")
             return
         }
 
         val items = history.toMutableList()
         items.add(getString(R.string.url_history_manual))
 
-        AlertDialog.Builder(this)
-            .setTitle(R.string.prompt_url_title)
-            .setItems(items.toTypedArray()) { _, which ->
-                if (which == history.size) {
-                    showUrlInputDialog(currentUrl())
+        val listView = ListView(this).apply {
+            divider = null
+            dividerHeight = 0
+        }
+
+        var dialog: AlertDialog? = null
+        val adapter = UrlHistoryAdapter(
+            items = items,
+            onSelect = { item ->
+                dialog?.dismiss()
+                if (item == getString(R.string.url_history_manual)) {
+                    showUrlInputDialog("")
                 } else {
-                    val url = history[which]
-                    saveUrl(url)
-                    web.loadUrl(url)
+                    saveUrl(item)
+                    web.loadUrl(item)
+                }
+            },
+            onDelete = { item ->
+                dialog?.let { showDeleteHistoryDialog(item, it) }
+            }
+        )
+        listView.adapter = adapter
+
+        dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.prompt_url_title)
+            .setView(listView)
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun showDeleteHistoryDialog(url: String, parentDialog: AlertDialog) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.url_history_delete_title)
+            .setMessage(getString(R.string.url_history_delete_message, url))
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.delete) { _, _ ->
+                removeFromHistory(url)
+                parentDialog.dismiss()
+                if (getUrlHistory().isEmpty()) {
+                    showUrlInputDialog("")
+                } else {
+                    showUrlDialog()
                 }
             }
-            .setNegativeButton(android.R.string.cancel, null)
             .show()
     }
 
     private fun showUrlInputDialog(defaultUrl: String) {
         val input = EditText(this).apply {
-            setText(defaultUrl)
+            if (defaultUrl.isBlank()) {
+                setText("")
+                hint = currentUrl()
+            } else {
+                setText(defaultUrl)
+                setSelection(text.length)
+            }
             inputType = InputType.TYPE_TEXT_VARIATION_URI
-            setSelection(text.length)
         }
         AlertDialog.Builder(this)
             .setTitle(R.string.prompt_url_title)
@@ -518,8 +559,39 @@ class MainActivity : ComponentActivity() {
         val history = getUrlHistory().toMutableList()
         history.removeAll { it.equals(url, ignoreCase = true) }
         history.add(0, url)
-        if (history.size > 5) history.removeAt(history.size - 1)
+        if (history.size > MAX_HISTORY_SIZE) history.removeAt(history.size - 1)
         return org.json.JSONArray(history).toString()
+    }
+
+    private fun removeFromHistory(url: String) {
+        val history = getUrlHistory().toMutableList()
+        history.removeAll { it.equals(url, ignoreCase = true) }
+        prefs.edit()
+            .putString(KEY_URL_HISTORY, org.json.JSONArray(history).toString())
+            .apply()
+    }
+
+    private inner class UrlHistoryAdapter(
+        items: List<String>,
+        private val onSelect: (String) -> Unit,
+        private val onDelete: (String) -> Unit
+    ) : ArrayAdapter<String>(this@MainActivity, R.layout.dialog_url_history_item, items) {
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView
+                ?: LayoutInflater.from(context).inflate(R.layout.dialog_url_history_item, parent, false)
+            val item = getItem(position) ?: return view
+            val urlText = view.findViewById<TextView>(R.id.url_text)
+            val deleteBtn = view.findViewById<TextView>(R.id.url_delete)
+
+            urlText.text = item
+            val isManual = item == getString(R.string.url_history_manual)
+            deleteBtn.visibility = if (isManual) View.GONE else View.VISIBLE
+
+            urlText.setOnClickListener { onSelect(item) }
+            deleteBtn.setOnClickListener { onDelete(item) }
+            return view
+        }
     }
 
     private inner class ShellWebViewClient : WebViewClient() {
