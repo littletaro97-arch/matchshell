@@ -6,7 +6,7 @@
 - 正式包名 `com.hcgy2018.site`
 - minSdk 26（Android 8.0）／targetSdk 35
 - 已发布稳定版：`1.0.0` / versionCode `100`（GitHub Release `v1.0.0`）
-- 开发中版本：`1.1.1` / versionCode `111`（未发版，见 `dist/matchshell-v1.1.1-pdf-arm64-debug.apk`）
+- 开发中版本：`1.1.2` / versionCode `112`（未发版，见 `dist/matchshell-v1.1.2-pdf-arm64-debug.apk`）
 - 版本号映射：major×100 + minor×10 + patch；只维护 PDF 转换变体
 - UI 仍保持无 appcompat；资源预处理使用 AndroidX ExifInterface 与 Media3 Transformer
 - 默认打开 `https://hcgy2018.site/`（在 `res/values/strings.xml` 里改）
@@ -69,7 +69,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 - 启动 3 秒后后台检查，每 24 小时最多自动检查一次；右上角菜单可手动“检查更新”。
 - 更新清单：`https://littletaro97-arch.github.io/matchshell/updates/stable.json`。
-- APK 来自 GitHub Releases；下载后校验清单 RSA 签名、APK SHA-256、包名、versionCode 和签名证书。
+- APK 从 Gitee Releases 下载，GitHub Release 保留同一产物作为归档；下载后校验清单 RSA 签名、APK SHA-256、包名、versionCode 和签名证书。
 - Android 8+ 首次更新需要允许本 APP 安装未知来源，安装动作仍由系统确认。
 - 发布步骤和 GitHub Secrets 见 [docs/github-update-release.md](docs/github-update-release.md)。
 
