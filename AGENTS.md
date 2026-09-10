@@ -178,4 +178,6 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - 从 `0.4.0-pdf` 起只维护 PDF 转换能力，不再继续开发或交付 Lite 变体。
 - 首个正式稳定版使用 `com.hcgy2018.site`；不得重新添加 `.pdf` 后缀。
 - 正式版本从 `1.0.0` / versionCode `100` 起步，后续 versionCode 必须严格递增并保持同一发布证书。
+- versionCode 映射：major×100 + minor×10 + patch（`1.0.0`→100、`1.1.1`→111）。
+  已发布 `1.0.0`/100；当前开发版 `1.1.1`/111（文件池私有化 + PDF 导入入口 + 重连 C+D），未发版。
 - 稳定发布通过 `.github/workflows/release.yml` 手动触发；真机更新链未验收前不得创建稳定 Release。
