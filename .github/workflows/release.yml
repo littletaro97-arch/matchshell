@@ -112,11 +112,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
-          gh release create '${{ steps.release.outputs.tag }}' \
-            "release/${{ steps.release.outputs.asset }}" \
-            --title '${{ steps.release.outputs.tag }}' \
-            --notes "$RELEASE_NOTES" \
-            --latest
+          if gh release view '${{ steps.release.outputs.tag }}' >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/existing-release"
+            gh release download '${{ steps.release.outputs.tag }}' \
+              --pattern '${{ steps.release.outputs.asset }}' \
+              --dir "$RUNNER_TEMP/existing-release"
+            existing_sha="$(sha256sum "$RUNNER_TEMP/existing-release/${{ steps.release.outputs.asset }}" | cut -d' ' -f1)"
+            test "$existing_sha" = '${{ steps.release.outputs.sha }}'
+          else
+            gh release create '${{ steps.release.outputs.tag }}' \
+              "release/${{ steps.release.outputs.asset }}" \
+              --title '${{ steps.release.outputs.tag }}' \
+              --notes "$RELEASE_NOTES" \
+              --latest
+          fi
 
       - name: Synchronize source and release tag to Gitee
         env:
