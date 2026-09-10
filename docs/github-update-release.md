@@ -1,4 +1,4 @@
-# MatchShell GitHub 稳定版发布
+# MatchShell GitHub 构建 + Gitee 下载发布
 
 ## 固定身份
 
@@ -16,8 +16,26 @@
 - `MATCHSHELL_KEY_ALIAS`
 - `MATCHSHELL_KEY_PASSWORD`
 - `UPDATE_SIGNING_PRIVATE_KEY_PEM`
+- `GITEE_ACCESS_TOKEN`：仅授予目标 Gitee 仓库所需权限，不写入 Git 或 APK。
+- `GITEE_USERNAME`：Gitee 登录用户名；组织仓库也填写实际执行推送的个人用户名。
 
-私钥和 keystore 不得提交到 Git。发布工作流通过 GitHub Actions 的 `Publish stable APK` 手动触发，输入版本名称、递增 versionCode、发布说明、灰度比例、最低支持版本和强制更新开关。
+## GitHub Actions Variables
+
+- `GITEE_OWNER`：Gitee 个人或组织的空间地址，不是显示昵称。
+- `GITEE_REPOSITORY`：Gitee 仓库路径，建议保持为 `matchshell`。
+
+私钥、keystore 和 Gitee 令牌不得提交到 Git。发布工作流通过 GitHub Actions 的 `Publish stable APK` 手动触发，输入版本名称、递增 versionCode、发布说明、灰度比例、最低支持版本和强制更新开关。
+
+工作流会在 GitHub 创建 Release 作为归档，同时将同一 APK 上传到 Gitee Release。签名更新清单仍由 GitHub Pages 提供，但其中 `apkUrl` 使用 Gitee 返回的真实附件下载地址。这样现有客户端无需更换清单入口，即可从下一次发布开始走 Gitee 下载。
+
+## 首次接入 Gitee
+
+1. 在 Gitee 使用“从 GitHub 导入仓库”，来源选择 `https://github.com/littletaro97-arch/matchshell`。
+2. 确认 Gitee 仓库的真实空间地址和仓库路径后，在本地添加名为 `gitee` 的远程仓库；保留现有 `origin` 指向 GitHub。
+3. 在 GitHub 仓库 Actions Variables 中设置 `GITEE_OWNER`、`GITEE_REPOSITORY`，在 Actions Secrets 中设置 `GITEE_USERNAME`、`GITEE_ACCESS_TOKEN`。
+4. 首次正式发布前先验证 Gitee 仓库已包含目标提交。Gitee Release API 的 `target_commitish` 必须能在目标仓库解析。
+
+账号绑定只代表 Gitee 能获得 GitHub 授权，不会自动创建同名仓库，也不会自动配置本机 Git 凭据。
 
 ## 客户端策略
 

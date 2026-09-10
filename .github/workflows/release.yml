@@ -90,15 +90,11 @@ jobs:
             -PVERSION_NAME='${{ inputs.version_name }}' \
             -PVERSION_CODE='${{ inputs.version_code }}'
 
-      - name: Prepare release asset and signed update manifest
-        id: manifest
+      - name: Prepare release asset
+        id: release
         env:
           VERSION_NAME: ${{ inputs.version_name }}
           VERSION_CODE: ${{ inputs.version_code }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-          ROLLOUT_PERCENT: ${{ inputs.rollout_percent }}
-          MINIMUM_SUPPORTED: ${{ inputs.minimum_supported_version_code }}
-          MANDATORY: ${{ inputs.mandatory }}
         run: |
           tag="v${VERSION_NAME}"
           asset="matchshell-${tag}-arm64.apk"
@@ -106,14 +102,93 @@ jobs:
           cp app/build/outputs/apk/pdf/release/app-pdf-release.apk "release/$asset"
           sha="$(sha256sum "release/$asset" | cut -d' ' -f1)"
           size="$(stat -c%s "release/$asset")"
-          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "size=$size" >> "$GITHUB_OUTPUT"
+
+      - name: Synchronize source to Gitee
+        env:
+          GITEE_ACCESS_TOKEN: ${{ secrets.GITEE_ACCESS_TOKEN }}
+          GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
+          GITEE_OWNER: ${{ vars.GITEE_OWNER }}
+          GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
+        run: |
+          test -n "$GITEE_ACCESS_TOKEN"
+          test -n "$GITEE_USERNAME"
+          test -n "$GITEE_OWNER"
+          test -n "$GITEE_REPOSITORY"
+          auth="$(printf '%s' "$GITEE_USERNAME:$GITEE_ACCESS_TOKEN" | base64 -w0)"
+          git -c "http.extraHeader=Authorization: Basic $auth" push \
+            "https://gitee.com/$GITEE_OWNER/$GITEE_REPOSITORY.git" \
+            HEAD:main --follow-tags
+
+      - name: Create immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          gh release create '${{ steps.release.outputs.tag }}' \
+            "release/${{ steps.release.outputs.asset }}" \
+            --title '${{ steps.release.outputs.tag }}' \
+            --notes "$RELEASE_NOTES" \
+            --latest
+
+      - name: Publish APK to Gitee Release
+        id: gitee
+        env:
+          GITEE_ACCESS_TOKEN: ${{ secrets.GITEE_ACCESS_TOKEN }}
+          GITEE_OWNER: ${{ vars.GITEE_OWNER }}
+          GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          TAG: ${{ steps.release.outputs.tag }}
+          ASSET: ${{ steps.release.outputs.asset }}
+        run: |
+          test -n "$GITEE_ACCESS_TOKEN"
+          test -n "$GITEE_OWNER"
+          test -n "$GITEE_REPOSITORY"
+
+          release_json="$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: token $GITEE_ACCESS_TOKEN" \
+            --data-urlencode "tag_name=$TAG" \
+            --data-urlencode "name=$TAG" \
+            --data-urlencode "body=$RELEASE_NOTES" \
+            --data-urlencode "target_commitish=$GITHUB_SHA" \
+            "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPOSITORY/releases")"
+          release_id="$(jq -er '.id' <<<"$release_json")"
+
+          asset_json="$(curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header "Authorization: token $GITEE_ACCESS_TOKEN" \
+            --form "file=@release/$ASSET" \
+            "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPOSITORY/releases/$release_id/attach_files")"
+          download_url="$(jq -er '.browser_download_url' <<<"$asset_json")"
+          case "$download_url" in
+            https://gitee.com/*) ;;
+            *) echo "Unexpected Gitee download URL" >&2; exit 1 ;;
+          esac
+          echo "download_url=$download_url" >> "$GITHUB_OUTPUT"
+
+      - name: Create signed update manifest
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          ROLLOUT_PERCENT: ${{ inputs.rollout_percent }}
+          MINIMUM_SUPPORTED: ${{ inputs.minimum_supported_version_code }}
+          MANDATORY: ${{ inputs.mandatory }}
+          APK_URL: ${{ steps.gitee.outputs.download_url }}
+          APK_SHA: ${{ steps.release.outputs.sha }}
+          APK_SIZE: ${{ steps.release.outputs.size }}
+        run: |
           jq -n \
             --arg versionName "$VERSION_NAME" \
             --argjson versionCode "$VERSION_CODE" \
             --argjson minimumSupportedVersionCode "$MINIMUM_SUPPORTED" \
-            --arg apkUrl "$url" \
-            --arg sha256 "$sha" \
-            --argjson size "$size" \
+            --arg apkUrl "$APK_URL" \
+            --arg sha256 "$APK_SHA" \
+            --argjson size "$APK_SIZE" \
             --argjson mandatory "$MANDATORY" \
             --argjson rolloutPercent "$ROLLOUT_PERCENT" \
             --arg releaseNotes "$RELEASE_NOTES" \
@@ -122,19 +197,6 @@ jobs:
           openssl dgst -sha256 -sign "$RUNNER_TEMP/update-private.pem" -out "$RUNNER_TEMP/stable.sig" public/updates/stable.json
           base64 -w0 "$RUNNER_TEMP/stable.sig" > public/updates/stable.json.sig
           printf '<!doctype html><meta charset="utf-8"><title>MatchShell updates</title><p>MatchShell stable update service.</p>' > public/index.html
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "asset=$asset" >> "$GITHUB_OUTPUT"
-
-      - name: Create immutable GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-        run: |
-          gh release create '${{ steps.manifest.outputs.tag }}' \
-            "release/${{ steps.manifest.outputs.asset }}" \
-            --title '${{ steps.manifest.outputs.tag }}' \
-            --notes "$RELEASE_NOTES" \
-            --latest
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
