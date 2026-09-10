@@ -90,92 +90,8 @@ jobs:
             -PVERSION_NAME='${{ inputs.version_name }}' \
             -PVERSION_CODE='${{ inputs.version_code }}'
 
-      - name: Prepare release asset
-        id: release
-        env:
-          VERSION_NAME: ${{ inputs.version_name }}
-          VERSION_CODE: ${{ inputs.version_code }}
-        run: |
-          tag="v${VERSION_NAME}"
-          asset="matchshell-${tag}-arm64.apk"
-          mkdir -p public/updates release
-          cp app/build/outputs/apk/pdf/release/app-pdf-release.apk "release/$asset"
-          sha="$(sha256sum "release/$asset" | cut -d' ' -f1)"
-          size="$(stat -c%s "release/$asset")"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "asset=$asset" >> "$GITHUB_OUTPUT"
-          echo "sha=$sha" >> "$GITHUB_OUTPUT"
-          echo "size=$size" >> "$GITHUB_OUTPUT"
-
-      - name: Create immutable GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-        run: |
-          if gh release view '${{ steps.release.outputs.tag }}' >/dev/null 2>&1; then
-            mkdir -p "$RUNNER_TEMP/existing-release"
-            gh release download '${{ steps.release.outputs.tag }}' \
-              --pattern '${{ steps.release.outputs.asset }}' \
-              --dir "$RUNNER_TEMP/existing-release"
-            existing_sha="$(sha256sum "$RUNNER_TEMP/existing-release/${{ steps.release.outputs.asset }}" | cut -d' ' -f1)"
-            test "$existing_sha" = '${{ steps.release.outputs.sha }}'
-          else
-            gh release create '${{ steps.release.outputs.tag }}' \
-              "release/${{ steps.release.outputs.asset }}" \
-              --title '${{ steps.release.outputs.tag }}' \
-              --notes "$RELEASE_NOTES" \
-              --latest
-          fi
-
-      - name: Synchronize source and release tag to Gitee
-        env:
-          GITEE_ACCESS_TOKEN: ${{ secrets.GITEE_ACCESS_TOKEN }}
-          GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
-          GITEE_OWNER: ${{ vars.GITEE_OWNER }}
-          GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
-        run: |
-          test -n "$GITEE_ACCESS_TOKEN"
-          test -n "$GITEE_USERNAME"
-          test -n "$GITEE_OWNER"
-          test -n "$GITEE_REPOSITORY"
-          auth="$(printf '%s' "$GITEE_USERNAME:$GITEE_ACCESS_TOKEN" | base64 -w0)"
-          git fetch origin 'refs/tags/${{ steps.release.outputs.tag }}:refs/tags/${{ steps.release.outputs.tag }}'
-          git -c "http.extraHeader=Authorization: Basic $auth" push \
-            "https://gitee.com/$GITEE_OWNER/$GITEE_REPOSITORY.git" \
-            HEAD:main 'refs/tags/${{ steps.release.outputs.tag }}' --force
-
-      - name: Publish APK to Gitee Release
-        id: gitee
-        env:
-          GITEE_ACCESS_TOKEN: ${{ secrets.GITEE_ACCESS_TOKEN }}
-          GITEE_OWNER: ${{ vars.GITEE_OWNER }}
-          GITEE_REPOSITORY: ${{ vars.GITEE_REPOSITORY }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-          TAG: ${{ steps.release.outputs.tag }}
-          ASSET: ${{ steps.release.outputs.asset }}
-        run: |
-          test -n "$GITEE_ACCESS_TOKEN"
-          test -n "$GITEE_OWNER"
-          test -n "$GITEE_REPOSITORY"
-
-          deadline=$((SECONDS + 1200))
-          download_url=""
-          while (( SECONDS < deadline )); do
-            release_json="$(curl --fail --silent --show-error --connect-timeout 15 --max-time 60 \
-              --header "Authorization: Bearer $GITEE_ACCESS_TOKEN" \
-              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPOSITORY/releases/tags/$TAG" 2>/dev/null || true)"
-            download_url="$(jq -r --arg name "$ASSET" '.assets[]? | select(.name == $name) | .browser_download_url' <<<"${release_json:-{}}" | head -n1)"
-            [[ -n "$download_url" ]] && break
-            sleep 15
-          done
-          test -n "$download_url"
-          case "$download_url" in
-            https://gitee.com/*) ;;
-            *) echo "Unexpected Gitee download URL" >&2; exit 1 ;;
-          esac
-          echo "download_url=$download_url" >> "$GITHUB_OUTPUT"
-
-      - name: Create signed update manifest
+      - name: Prepare release asset and signed update manifest
+        id: manifest
         env:
           VERSION_NAME: ${{ inputs.version_name }}
           VERSION_CODE: ${{ inputs.version_code }}
@@ -183,17 +99,21 @@ jobs:
           ROLLOUT_PERCENT: ${{ inputs.rollout_percent }}
           MINIMUM_SUPPORTED: ${{ inputs.minimum_supported_version_code }}
           MANDATORY: ${{ inputs.mandatory }}
-          APK_URL: ${{ steps.gitee.outputs.download_url }}
-          APK_SHA: ${{ steps.release.outputs.sha }}
-          APK_SIZE: ${{ steps.release.outputs.size }}
         run: |
+          tag="v${VERSION_NAME}"
+          asset="matchshell-${tag}-arm64.apk"
+          mkdir -p public/updates release
+          cp app/build/outputs/apk/pdf/release/app-pdf-release.apk "release/$asset"
+          sha="$(sha256sum "release/$asset" | cut -d' ' -f1)"
+          size="$(stat -c%s "release/$asset")"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}"
           jq -n \
             --arg versionName "$VERSION_NAME" \
             --argjson versionCode "$VERSION_CODE" \
             --argjson minimumSupportedVersionCode "$MINIMUM_SUPPORTED" \
-            --arg apkUrl "$APK_URL" \
-            --arg sha256 "$APK_SHA" \
-            --argjson size "$APK_SIZE" \
+            --arg apkUrl "$url" \
+            --arg sha256 "$sha" \
+            --argjson size "$size" \
             --argjson mandatory "$MANDATORY" \
             --argjson rolloutPercent "$ROLLOUT_PERCENT" \
             --arg releaseNotes "$RELEASE_NOTES" \
@@ -202,6 +122,19 @@ jobs:
           openssl dgst -sha256 -sign "$RUNNER_TEMP/update-private.pem" -out "$RUNNER_TEMP/stable.sig" public/updates/stable.json
           base64 -w0 "$RUNNER_TEMP/stable.sig" > public/updates/stable.json.sig
           printf '<!doctype html><meta charset="utf-8"><title>MatchShell updates</title><p>MatchShell stable update service.</p>' > public/index.html
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Create immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          gh release create '${{ steps.manifest.outputs.tag }}' \
+            "release/${{ steps.manifest.outputs.asset }}" \
+            --title '${{ steps.manifest.outputs.tag }}' \
+            --notes "$RELEASE_NOTES" \
+            --latest
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
