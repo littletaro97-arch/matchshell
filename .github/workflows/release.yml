@@ -93,6 +93,7 @@ jobs:
       - name: Prepare release asset and signed update manifest
         id: manifest
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION_NAME: ${{ inputs.version_name }}
           VERSION_CODE: ${{ inputs.version_code }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
@@ -104,6 +105,21 @@ jobs:
           asset="matchshell-${tag}-arm64.apk"
           mkdir -p public/updates release
           cp app/build/outputs/apk/pdf/release/app-pdf-release.apk "release/$asset"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/existing-release"
+            gh release download "$tag" --pattern "$asset" --dir "$RUNNER_TEMP/existing-release"
+            existing="$RUNNER_TEMP/existing-release/$asset"
+            apksigner verify "$existing"
+            built_cert="$(apksigner verify --print-certs "release/$asset" | sed -n 's/^.*Signer.*certificate SHA-256 digest: //p' | head -n1)"
+            existing_cert="$(apksigner verify --print-certs "$existing" | sed -n 's/^.*Signer.*certificate SHA-256 digest: //p' | head -n1)"
+            test -n "$built_cert"
+            test "$built_cert" = "$existing_cert"
+            existing_badging="$(aapt dump badging "$existing" | head -n1)"
+            grep -Fq "name='com.hcgy2018.site'" <<<"$existing_badging"
+            grep -Fq "versionCode='${VERSION_CODE}'" <<<"$existing_badging"
+            grep -Fq "versionName='${VERSION_NAME}'" <<<"$existing_badging"
+            cp "$existing" "release/$asset"
+          fi
           sha="$(sha256sum "release/$asset" | cut -d' ' -f1)"
           size="$(stat -c%s "release/$asset")"
           url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}"
@@ -130,15 +146,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
-          if gh release view '${{ steps.manifest.outputs.tag }}' >/dev/null 2>&1; then
-            mkdir -p "$RUNNER_TEMP/existing-release"
-            gh release download '${{ steps.manifest.outputs.tag }}' \
-              --pattern '${{ steps.manifest.outputs.asset }}' \
-              --dir "$RUNNER_TEMP/existing-release"
-            cmp --silent \
-              "release/${{ steps.manifest.outputs.asset }}" \
-              "$RUNNER_TEMP/existing-release/${{ steps.manifest.outputs.asset }}"
-          else
+          if ! gh release view '${{ steps.manifest.outputs.tag }}' >/dev/null 2>&1; then
             gh release create '${{ steps.manifest.outputs.tag }}' \
               "release/${{ steps.manifest.outputs.asset }}" \
               --title '${{ steps.manifest.outputs.tag }}' \
