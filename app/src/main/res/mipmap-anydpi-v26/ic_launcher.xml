@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 底板色随系统深浅色切换（values-night 覆盖 launcher_plate），
+     logo 放在 foreground 里保持原色不动。
+     刻意不提供 <monochrome>：一旦提供，Android 13+ 的"主题图标"会把 logo
+     单色化染色，logo 就没有品牌色了。 -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
-    <background android:drawable="@color/ic_launcher_background" />
+    <background android:drawable="@color/launcher_plate" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
 </adaptive-icon>

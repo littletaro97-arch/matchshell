@@ -64,6 +64,20 @@
     <string name="update_later">稍后提醒</string>
     <string name="update_downloading">正在下载更新…</string>
     <string name="update_download_failed">更新下载失败：%1$s</string>
+    <string name="update_download_title">火柴公益 %1$s 更新</string>
+    <string name="update_download_started">已开始后台下载，可继续使用，完成后会提示安装</string>
+    <string name="update_download_hide">后台下载</string>
+    <string name="update_download_cancel">取消下载</string>
+    <string name="update_download_cancelled">已取消下载</string>
+    <string name="update_ready_title">下载完成</string>
+    <string name="update_ready_message">版本 %1$s 已下载完成，是否立即安装？</string>
+    <string name="update_install_now">立即安装</string>
+    <string name="update_install_later">稍后安装</string>
+    <string name="update_file_missing">找不到已下载的安装包</string>
+    <string name="update_error_space">存储空间不足</string>
+    <string name="update_error_http">下载被服务器拒绝（代码 %1$d）</string>
+    <string name="update_error_io">写入文件失败</string>
+    <string name="update_error_unknown">未知原因（代码 %1$d）</string>
     <string name="update_install_failed">安装更新失败：%1$s</string>
     <string name="update_size_unknown">大小未知</string>
 

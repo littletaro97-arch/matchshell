@@ -159,6 +159,16 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - 本地调试时自动把页面内 `hcgy2018.site` 硬编码链接重定向到当前调试地址
 - `onShowFileChooser` 文件多选上传
 - `DownloadManager` 下载（Android 13+ 通知权限 + cookie + RFC 5987 中文文件名）
+- **应用内更新改为后台下载**：走系统 `DownloadManager`（`setDestinationInExternalFilesDir` 落到 APP 私有
+  `files/Download/`，不需要存储权限，也不污染公共目录），通知栏可见进度；APP 切后台/被杀都不影响下载。
+  任务账目存 SharedPreferences（`app_update/pending_download`），进程重启靠 `resumePendingDownload()` 恢复
+  ——广播只在进程活着时收得到，不能只依赖 `ACTION_DOWNLOAD_COMPLETE`。菜单「检查更新」有下载在进行时
+  改为展示进度面板（可「后台下载」关闭，可「取消下载」），面板关闭不中断下载。
+  校验链保持原样：清单 RSA 签名 → APK SHA-256 → 包名/versionCode/签名证书，通过后才问是否安装。
+- **启动图标深浅色适配**：底板色用 `@color/launcher_plate`（`values-night` 覆盖为 `#2D2A26`），
+  foreground 保持原图不变色；**刻意不提供 `<monochrome>`**，否则 Android 13+ 主题图标会把 logo 单色化。
+  注意 `ic_launcher_background` 已拆成两个名字：`page_background`（APP 页面底色，不做深色适配）
+  与 `launcher_plate`（仅图标底板），别再混用——APP 内部文字还是浅色一套，改深色背景会变成深底深字。
 - 加载超时 / 错误分类；**重连策略为「C+D」**：不做定时重试，只在 `ConnectivityManager` 报告网络可用/切换时自动重试一次（间隔 ≥30 秒冷却）；`onReceivedHttpError`（服务器已应答）不自动重试；手动重试在加载期间禁用按钮防叠加。原有的定时重试（1.5 秒 × 3 次）已移除
 - 文件池「导入 PDF」入口：已有 PDF 直接进池，不经转换引擎；`PreprocessActivity` 的「文件转 PDF」选到 PDF 时也走同一条导入路径
 - PDF 无损压缩**未接入**：实测用户样本（112 页课件，图片占体积 82.5%）无损结构优化仅 −2.4%，判断为不值得引入 qpdf native 库；若后续要压缩，唯一稳妥路径是 qpdf arm64 交叉编译 + JNI

@@ -1,18 +1,27 @@
 package com.hcgy2018.site
 
 import android.app.AlertDialog
+import android.app.DownloadManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageInfo
 import android.content.pm.PackageInstaller
 import android.content.pm.PackageManager
+import android.database.Cursor
+import android.net.Uri
 import android.os.Build
+import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Base64
 import android.widget.ProgressBar
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -45,6 +54,65 @@ class AppUpdateManager(
 ) {
     private val prefs = activity.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
     private var pendingApk: File? = null
+
+    // 交给系统 DownloadManager 在后台下载：APP 退到后台或被杀都不影响。
+    // 下载项状态存 prefs，进程重启后靠它恢复（广播只在进程活着时收得到）。
+    private var download: DownloadTask? = null
+    private var receiverRegistered = false
+    private var progressDialog: AlertDialog? = null
+    private val progressHandler = Handler(Looper.getMainLooper())
+
+    private data class DownloadTask(
+        val id: Long,
+        val versionName: String,
+        val versionCode: Int,
+        val sha256: String,
+        val size: Long
+    ) {
+        fun toJson() = JSONObject().apply {
+            put("id", id)
+            put("versionName", versionName)
+            put("versionCode", versionCode)
+            put("sha256", sha256)
+            put("size", size)
+        }
+
+        companion object {
+            fun from(raw: String?): DownloadTask? = runCatching {
+                val json = JSONObject(raw ?: return null)
+                DownloadTask(
+                    json.getLong("id"),
+                    json.getString("versionName"),
+                    json.getInt("versionCode"),
+                    json.getString("sha256"),
+                    json.optLong("size", 0L)
+                )
+            }.getOrNull()
+        }
+    }
+
+    private data class Snapshot(
+        val status: Int,
+        val downloaded: Long,
+        val total: Long,
+        val localUri: String?,
+        val reason: Int
+    )
+
+    private val completionReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val finishedId = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L)
+            val task = download ?: loadTask() ?: return
+            if (finishedId != task.id) return
+            val snapshot = query(task.id) ?: return
+            if (snapshot.status == DownloadManager.STATUS_SUCCESSFUL) {
+                verifyAndOfferInstall(task, snapshot)
+            } else {
+                clearTask()
+                Toast.makeText(activity, activity.getString(R.string.update_download_failed, reasonText(snapshot.reason)), Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     fun checkAutomatically() {
         val now = System.currentTimeMillis()
@@ -124,39 +192,231 @@ class AppUpdateManager(
         AlertDialog.Builder(activity)
             .setTitle(R.string.update_available_title)
             .setMessage(message)
-            .setPositiveButton(R.string.update_now) { _, _ -> download(info) }
+            .setPositiveButton(R.string.update_now) { _, _ -> startBackgroundDownload(info) }
             .apply { if (!forced) setNegativeButton(R.string.update_later, null) }
             .setCancelable(!forced)
             .show()
     }
 
-    private fun download(info: AppUpdateInfo) {
-        val progress = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
-            isIndeterminate = info.size <= 0
+    /** 交给系统下载器在后台下载；这里只负责入队和记账，不阻塞界面。 */
+    private fun startBackgroundDownload(info: AppUpdateInfo) {
+        val fileName = "matchshell-${info.versionName}.apk"
+        val request = DownloadManager.Request(Uri.parse(info.apkUrl)).apply {
+            setTitle(activity.getString(R.string.update_download_title, info.versionName))
+            setDescription(activity.getString(R.string.update_downloading))
+            setMimeType("application/vnd.android.package-archive")
+            // 通知栏可见，用户可以切走继续做别的事
+            setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+            addRequestHeader("User-Agent", "MatchShell/${BuildConfig.VERSION_NAME}")
+            setDestinationInExternalFilesDir(activity, Environment.DIRECTORY_DOWNLOADS, fileName)
+        }
+        val manager = activity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val id = runCatching { manager.enqueue(request) }.getOrElse {
+            Toast.makeText(
+                activity,
+                activity.getString(R.string.update_download_failed, it.message),
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        val task = DownloadTask(id, info.versionName, info.versionCode, info.sha256, info.size)
+        download = task
+        saveTask(task)
+        registerReceiverIfNeeded()
+        Toast.makeText(activity, R.string.update_download_started, Toast.LENGTH_LONG).show()
+    }
+
+    private fun registerReceiverIfNeeded() {
+        if (receiverRegistered) return
+        ContextCompat.registerReceiver(
+            activity,
+            completionReceiver,
+            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        receiverRegistered = true
+    }
+
+    /** APP 启动时调用：把上次没走完的下载接上。 */
+    fun resumePendingDownload() {
+        val task = loadTask() ?: return
+        download = task
+        registerReceiverIfNeeded()
+        when (query(task.id)?.status) {
+            DownloadManager.STATUS_SUCCESSFUL -> query(task.id)?.let { verifyAndOfferInstall(task, it) }
+            DownloadManager.STATUS_FAILED -> clearTask()
+            else -> Unit // 还在跑，安静等着，不打扰用户
+        }
+    }
+
+    /**
+     * 菜单里点「检查更新」时调用。
+     * 有进行中的下载就展示进度面板并返回 true，否则返回 false 交回检查流程。
+     */
+    fun showDownloadProgressIfAny(): Boolean {
+        val task = download ?: loadTask() ?: return false
+        val snapshot = query(task.id)
+        if (snapshot == null) {
+            clearTask()
+            return false
+        }
+        when (snapshot.status) {
+            DownloadManager.STATUS_SUCCESSFUL -> {
+                verifyAndOfferInstall(task, snapshot)
+                return true
+            }
+            DownloadManager.STATUS_FAILED -> {
+                clearTask()
+                Toast.makeText(
+                    activity,
+                    activity.getString(R.string.update_download_failed, reasonText(snapshot.reason)),
+                    Toast.LENGTH_LONG
+                ).show()
+                return false
+            }
+        }
+        download = task
+        registerReceiverIfNeeded()
+        showProgressDialog(task)
+        return true
+    }
+
+    private fun showProgressDialog(task: DownloadTask) {
+        val bar = ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
             setPadding(48, 24, 48, 24)
         }
-        val dialog = AlertDialog.Builder(activity)
+        progressDialog = AlertDialog.Builder(activity)
             .setTitle(R.string.update_downloading)
-            .setView(progress)
-            .setCancelable(false)
+            .setView(bar)
+            .setPositiveButton(R.string.update_download_hide, null)
+            .setNegativeButton(R.string.update_download_cancel) { _, _ -> cancelDownload(task) }
+            .setOnDismissListener { stopProgressUpdates() }
             .show()
+        // 面板关掉不中断下载，只是不再刷新进度
+        val tick = object : Runnable {
+            override fun run() {
+                val snapshot = query(task.id) ?: return
+                if (snapshot.status != DownloadManager.STATUS_RUNNING &&
+                    snapshot.status != DownloadManager.STATUS_PENDING &&
+                    snapshot.status != DownloadManager.STATUS_PAUSED
+                ) {
+                    progressDialog?.dismiss()
+                    return
+                }
+                val total = snapshot.total.takeIf { it > 0 } ?: task.size
+                if (total > 0) {
+                    bar.isIndeterminate = false
+                    bar.progress = ((snapshot.downloaded * 100) / total).toInt().coerceIn(0, 100)
+                } else {
+                    bar.isIndeterminate = true
+                }
+                progressHandler.postDelayed(this, PROGRESS_INTERVAL_MS)
+            }
+        }
+        progressHandler.post(tick)
+    }
+
+    private fun stopProgressUpdates() {
+        progressHandler.removeCallbacksAndMessages(null)
+        progressDialog = null
+    }
+
+    private fun cancelDownload(task: DownloadTask) {
+        stopProgressUpdates()
+        runCatching {
+            (activity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).remove(task.id)
+        }
+        clearTask()
+        Toast.makeText(activity, R.string.update_download_cancelled, Toast.LENGTH_SHORT).show()
+    }
+
+    private fun query(id: Long): Snapshot? = runCatching {
+        val manager = activity.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        manager.query(DownloadManager.Query().setFilterById(id))?.use { cursor ->
+            if (!cursor.moveToFirst()) return@use null
+            Snapshot(
+                status = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)),
+                downloaded = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)),
+                total = cursor.getLong(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)),
+                localUri = cursor.getString(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI)),
+                reason = cursor.getInt(cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+            )
+        }
+    }.getOrNull()
+
+    private fun localFile(snapshot: Snapshot): File? {
+        val raw = snapshot.localUri ?: return null
+        return runCatching { File(Uri.parse(raw).path ?: return null) }.getOrNull()?.takeIf { it.exists() }
+    }
+
+    /** 下载结束后：先校验完整性与身份，再问用户装不装。 */
+    private fun verifyAndOfferInstall(task: DownloadTask, snapshot: Snapshot) {
+        if (activity.isFinishing || activity.isDestroyed) return // 保留记录，下次启动再处理
+        val apk = localFile(snapshot)
+        if (apk == null) {
+            clearTask()
+            Toast.makeText(
+                activity,
+                activity.getString(R.string.update_download_failed, activity.getString(R.string.update_file_missing)),
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
         activity.lifecycleScope.launch {
-            runCatching {
+            val result = runCatching {
                 withContext(Dispatchers.IO) {
-                    val target = File(activity.cacheDir, "matchshell-update.apk")
-                    downloadFile(info.apkUrl, target, info.size) { percent ->
-                        activity.runOnUiThread { progress.isIndeterminate = false; progress.progress = percent }
-                    }
-                    check(sha256(target).equals(info.sha256, ignoreCase = true)) { "APK 校验值不匹配" }
-                    checkApkIdentity(target, info.versionCode)
-                    target
+                    check(sha256(apk).equals(task.sha256, ignoreCase = true)) { "APK 校验值不匹配" }
+                    checkApkIdentity(apk, task.versionCode)
                 }
-            }.onSuccess { dialog.dismiss(); beginInstall(it) }
-                .onFailure {
-                    dialog.dismiss()
-                    Toast.makeText(activity, activity.getString(R.string.update_download_failed, it.message), Toast.LENGTH_LONG).show()
-                }
+            }
+            result.onSuccess {
+                clearTask()
+                AlertDialog.Builder(activity)
+                    .setTitle(R.string.update_ready_title)
+                    .setMessage(activity.getString(R.string.update_ready_message, task.versionName))
+                    .setPositiveButton(R.string.update_install_now) { _, _ -> beginInstall(apk) }
+                    .setNegativeButton(R.string.update_install_later) { _, _ -> apk.delete() }
+                    .setCancelable(false)
+                    .show()
+            }.onFailure {
+                apk.delete()
+                clearTask()
+                Toast.makeText(
+                    activity,
+                    activity.getString(R.string.update_download_failed, it.message),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun saveTask(task: DownloadTask) {
+        prefs.edit().putString(KEY_DOWNLOAD, task.toJson().toString()).apply()
+    }
+
+    private fun loadTask(): DownloadTask? = DownloadTask.from(prefs.getString(KEY_DOWNLOAD, null))
+
+    private fun clearTask() {
+        download = null
+        prefs.edit().remove(KEY_DOWNLOAD).apply()
+    }
+
+    private fun reasonText(reason: Int): String = when (reason) {
+        DownloadManager.ERROR_INSUFFICIENT_SPACE -> activity.getString(R.string.update_error_space)
+        DownloadManager.ERROR_HTTP_DATA_ERROR, DownloadManager.ERROR_UNHANDLED_HTTP_CODE ->
+            activity.getString(R.string.update_error_http, reason)
+        DownloadManager.ERROR_CANNOT_RESUME, DownloadManager.ERROR_FILE_ERROR ->
+            activity.getString(R.string.update_error_io)
+        else -> activity.getString(R.string.update_error_unknown, reason)
+    }
+
+    /** Activity 销毁时调用，别把接收器和轮询泄漏出去。 */
+    fun release() {
+        stopProgressUpdates()
+        if (receiverRegistered) {
+            runCatching { activity.unregisterReceiver(completionReceiver) }
+            receiverRegistered = false
         }
     }
 
@@ -232,30 +492,6 @@ class AppUpdateManager(
         }.also { connection.disconnect() }
     }
 
-    private fun downloadFile(url: String, target: File, expectedSize: Long, onProgress: (Int) -> Unit) {
-        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10_000
-            readTimeout = 30_000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "MatchShell/${BuildConfig.VERSION_NAME}")
-        }
-        val total = connection.contentLengthLong.takeIf { it > 0 } ?: expectedSize
-        connection.inputStream.use { input ->
-            target.outputStream().use { output ->
-                val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                var copied = 0L
-                while (true) {
-                    val count = input.read(buffer)
-                    if (count < 0) break
-                    output.write(buffer, 0, count)
-                    copied += count
-                    if (total > 0) onProgress(((copied * 100) / total).toInt().coerceIn(0, 100))
-                }
-            }
-        }
-        connection.disconnect()
-    }
-
     private fun sha256(file: File): String = MessageDigest.getInstance("SHA-256")
         .digest(file.readBytes()).toHex()
 
@@ -270,7 +506,9 @@ class AppUpdateManager(
     private companion object {
         const val PREFS = "app_update"
         const val KEY_LAST_CHECK = "last_check"
+        const val KEY_DOWNLOAD = "pending_download"
         const val CHECK_INTERVAL_MS = 24L * 60L * 60L * 1000L
+        const val PROGRESS_INTERVAL_MS = 800L
         const val MAX_MANIFEST_BYTES = 128 * 1024
         const val MAX_SIGNATURE_BYTES = 8 * 1024
     }

@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#F5EFE6</color>
+    <!-- APP 页面底色（不是启动图标底色，图标用 launcher_plate） -->
+    <color name="page_background">#F5EFE6</color>
+
+    <!-- 启动图标底板色；深色版本在 values-night/colors.xml 里覆盖，图标内的 logo 不变色 -->
+    <color name="launcher_plate">#F5EFE6</color>
     <color name="brand">#A65E44</color>
     <color name="text_primary">#2D2A26</color>
     <color name="text_secondary">#6B655D</color>

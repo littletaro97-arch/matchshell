@@ -3,7 +3,7 @@
     android:id="@+id/file_pool_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/ic_launcher_background"
+    android:background="@color/page_background"
     android:orientation="vertical"
     android:padding="20dp">
 

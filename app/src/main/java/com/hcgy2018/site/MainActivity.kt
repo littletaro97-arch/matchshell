@@ -177,6 +177,8 @@ class MainActivity : ComponentActivity() {
         })
 
         web.loadUrl(currentUrl())
+        // 上次的更新包可能已在后台下载完，先把这笔账接上再谈检查
+        updateManager.resumePendingDownload()
         mainHandler.postDelayed({ updateManager.checkAutomatically() }, UPDATE_CHECK_DELAY_MS)
     }
 
@@ -201,6 +203,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         cancelPageTimeout()
+        updateManager.release()
         runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
         web.destroy()
         super.onDestroy()
@@ -363,7 +366,9 @@ class MainActivity : ComponentActivity() {
                 showUrlDialog(); true
             }
             menu.add(getString(R.string.menu_check_update)).setOnMenuItemClickListener {
-                updateManager.checkManually(); true
+                // 有后台下载在进行就展示进度，否则才去查更新
+                if (!updateManager.showDownloadProgressIfAny()) updateManager.checkManually()
+                true
             }
             show()
         }

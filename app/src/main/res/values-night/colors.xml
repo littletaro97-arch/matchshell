@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 深色模式（系统深色主题）下的启动图标底板色。
+     只覆盖 launcher_plate：APP 内部页面不做深色适配，page_background 等文字相关配色
+     仍是浅色一套，改了会出现"深色底 + 深色字"读不了的情况。 -->
+<resources>
+    <color name="launcher_plate">#2D2A26</color>
+</resources>
