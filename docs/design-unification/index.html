@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-page-node-id="aqprEecyk0GTFdfoCgaOse">
+<head data-page-node-id="X43WqVViiWOKwmGrRDqppT">
+    <meta charset="UTF-8" data-page-node-id="etAucBelXSuCaIqvod6eC4">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" data-page-node-id="xqeyZwLAOlfwW6mHicwTQC">
+    <title>MatchShell UI 视觉统一方案</title>
+    <style>
+        :root {
+            --bg: #F5EFE6;
+            --card: #E8E4DA;
+            --brand: #A65E44;
+            --text-primary: #2D2A26;
+            --text-secondary: #6B655D;
+            --text-tertiary: #8A837A;
+            --radius: 16px;
+            --shadow: 0 4px 24px rgba(45, 42, 38, 0.06);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 40px 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans SC", sans-serif;
+            background: var(--bg);
+            color: var(--text-primary);
+            line-height: 1.7;
+        }
+
+        .container {
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        header {
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0 0 8px;
+            color: var(--text-primary);
+        }
+
+        .subtitle {
+            font-size: 15px;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: var(--radius);
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: var(--shadow);
+        }
+
+        .card h2 {
+            font-size: 18px;
+            font-weight: 700;
+            margin: 0 0 16px;
+            color: var(--text-primary);
+        }
+
+        .tokens {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 12px;
+        }
+
+        .token {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 12px;
+        }
+
+        .token-swatch {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            flex-shrink: 0;
+            border: 1px solid rgba(45, 42, 38, 0.08);
+        }
+
+        .token-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .token-value {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+
+        .design-shot {
+            width: 100%;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            margin-bottom: 24px;
+        }
+
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .file-list li {
+            padding: 10px 0;
+            border-bottom: 1px solid rgba(45, 42, 38, 0.08);
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .file-list li:last-child {
+            border-bottom: none;
+        }
+
+        .file-list code {
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            background: rgba(255, 255, 255, 0.5);
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+
+        .note {
+            background: rgba(166, 94, 68, 0.08);
+            border-left: 3px solid var(--brand);
+            padding: 12px 16px;
+            border-radius: 0 12px 12px 0;
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+        }
+
+        .success {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(166, 94, 68, 0.1);
+            color: var(--brand);
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .section-title {
+            font-size: 20px;
+            font-weight: 700;
+            margin: 40px 0 16px;
+            color: var(--text-primary);
+        }
+
+        ul.plain {
+            padding-left: 20px;
+            color: var(--text-secondary);
+        }
+
+        ul.plain li {
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body data-page-node-id="Yoj1ZlvbAxG84V5JP4v8AA">
+    <div class="container" data-page-node-id="AqSVCzUlji4Z7l3Tk2ErPV">
+        <header data-page-node-id="sB78kAGCLJ26B2YlMEXzub">
+            <h1 data-page-node-id="SjICZAV0IcRGjDFQldzsjA">MatchShell UI 视觉统一方案</h1>
+            <p class="subtitle" data-page-node-id="OpIsFpys03WtvfbIo3fDeP">针对 APP 原生功能区（资源预处理、文件池、菜单入口、错误/调试弹窗）的视觉统一，网站套壳区域保持不变。</p>
+        </header>
+
+        <img src="matchshell-ui-unification.png" alt="MatchShell UI 设计稿" class="design-shot" data-page-node-id="yyskXuTLG5rCuyo3Nt2wK2">
+
+        <div class="card" data-page-node-id="x2eE5PnqCzAwsrtpXd2NA9">
+            <h2 data-page-node-id="SV2GK4di0iXu5uDmJuZZu2">设计系统 Tokens</h2>
+            <div class="tokens" data-page-node-id="zJPkABx80AukOvAqBBbc37">
+                <div class="token" data-page-node-id="nczsPW7fqAXJ6FjKAKO88c">
+                    <div class="token-swatch" style="background: #A65E44;" data-page-node-id="0dFPKdl8Nmqf6Knruefk7a"></div>
+                    <div data-page-node-id="L30vbewl3dmRxIuzgrLsgH">
+                        <div class="token-name" data-page-node-id="TTe5DL4a7AglQWmNBntVlN">Brand</div>
+                        <div class="token-value" data-page-node-id="n4cnSlEn3ZJklZpj2Qq3Ht">#A65E44</div>
+                    </div>
+                </div>
+                <div class="token" data-page-node-id="JXhfwrCyBUCzwxfwXgkM84">
+                    <div class="token-swatch" style="background: #F5EFE6;" data-page-node-id="KJZLBkEWkMs8nZ57j6PsM4"></div>
+                    <div data-page-node-id="j4RnFc4SgR3mNmG0MDlT2w">
+                        <div class="token-name" data-page-node-id="bFt9hBplidODEZ7gEPMgxR">Background</div>
+                        <div class="token-value" data-page-node-id="ZXDDHGGHBiCRgPZtXLkYWL">#F5EFE6</div>
+                    </div>
+                </div>
+                <div class="token" data-page-node-id="Lhb5NTL0uVszQNkuBAwnyp">
+                    <div class="token-swatch" style="background: #E8E4DA;" data-page-node-id="WplDXnXmJsQMPDt4YGIqon"></div>
+                    <div data-page-node-id="RGRG8CpFYkESMWx6EGJRCC">
+                        <div class="token-name" data-page-node-id="9K79tMnM5V37CgMrAtf7SE">Card</div>
+                        <div class="token-value" data-page-node-id="rAJFIPFHv75O9NHWOX8r2f">#E8E4DA</div>
+                    </div>
+                </div>
+                <div class="token" data-page-node-id="YkOaEdIc8FpIV9BPA3tDxg">
+                    <div class="token-swatch" style="background: #2D2A26;" data-page-node-id="JBYPIV49ZOtHxxRH98nyDQ"></div>
+                    <div data-page-node-id="n07lxdwFkYIhjWjrs3oaAc">
+                        <div class="token-name" data-page-node-id="Q4TTGWJuY1v5bCMCoyiSWo">Text Primary</div>
+                        <div class="token-value" data-page-node-id="N0GwTZxC3WPyls7ZYErfJ2">#2D2A26</div>
+                    </div>
+                </div>
+                <div class="token" data-page-node-id="8HE80ejYwIjDhgbxn66PEq">
+                    <div class="token-swatch" style="background: #6B655D;" data-page-node-id="Q7ISoxMSfPWr3UAkvnnZgw"></div>
+                    <div data-page-node-id="Bx3DamtIMqZSZWaEDeah1V">
+                        <div class="token-name" data-page-node-id="zDxxrFLzsHabQVAu40RtWL">Text Secondary</div>
+                        <div class="token-value" data-page-node-id="sCm2MMsklu4F4ujGP0FOOR">#6B655D</div>
+                    </div>
+                </div>
+                <div class="token" data-page-node-id="7kMewIANWZF43OKLzFCVgC">
+                    <div class="token-swatch" style="background: #8A837A;" data-page-node-id="PjocOOIRSg6yEpozUlnK5F"></div>
+                    <div data-page-node-id="OuKwjZ4iS3TB0FBfDu67J7">
+                        <div class="token-name" data-page-node-id="7Mbiv0xwBTiQZiBRdGHT34">Text Tertiary</div>
+                        <div class="token-value" data-page-node-id="4aySlEIBu6hxmBPZn6IjJX">#8A837A</div>
+                    </div>
+                </div>
+            </div>
+            <div class="note" data-page-node-id="rhWHyJ2qc8DqTqKxLQ5B3X">
+                所有颜色均已收敛到 <code data-page-node-id="BEXjMbAsHkH8ImizQNNQXY">colors.xml</code>；新增 <code data-page-node-id="jqLlcR8u2x9wAhdDZ0Affr">brand_10</code> 用于图标背景与 meta pill 底色，避免各 drawable 中硬编码透明度。
+            </div>
+        </div>
+
+        <div class="card" data-page-node-id="eTypDniNRGPaG4pgaqSROr">
+            <h2 data-page-node-id="01dP1YR5EYWrioNZvj7IqJ">本次修改内容</h2>
+            <ul class="plain" data-page-node-id="3XrWJdXDRrrcVg8F0eYAjU">
+                <li data-page-node-id="b7rdnOT9PlQaHtjKkC6Vtu"><strong data-page-node-id="tJWU8dHj8LWq6DagbpevlH">资源预处理页</strong>：标题统一为 22sp 粗体；功能卡片统一 20dp 圆角、1dp 浅色描边、品牌色图标背景；按钮拆分为 Primary（品牌填充）与 Secondary（卡片底）两种样式；进度条与状态文案颜色统一。</li>
+                <li data-page-node-id="DLkIjiIAqwylBJexRg1nAH"><strong data-page-node-id="S4t81fpDo4ybXsDrxrrv18">文件池</strong>：标题/空状态颜色 token 化；Grid 项增加卡片包裹（20dp 圆角）、缩略图加 12dp 圆角与描边；底部按钮使用 Primary 样式。</li>
+                <li data-page-node-id="BDnsxhanYcIqwbPMFrUgh3"><strong data-page-node-id="qQovvYXDCluYhqaFGYtcxv">主界面原生元素</strong>：右上角菜单按钮改为圆角卡片背景，与功能卡片风格一致；错误视图统一背景、文字颜色与 Primary 重试按钮。</li>
+                <li data-page-node-id="0N6e0ucpLHQyjO1oy3ZEJR"><strong data-page-node-id="T3QU1nkz5LHtQvetEcDUWQ">调试地址弹窗项</strong>：删除按钮不再使用系统红色，改为品牌色文字 + 品牌浅色 pill 背景，视觉统一。</li>
+                <li data-page-node-id="y2g6nvAbOaPRKMJRXlNuY9"><strong data-page-node-id="hrOTCkdbiwwCDIX60xJS7G">占位缩略图</strong>：文件池默认占位图颜色与 card 背景、brand 对齐。</li>
+            </ul>
+        </div>
+
+        <div class="card" data-page-node-id="PhbW1d19djhdbFKtPR7YBq">
+            <h2 data-page-node-id="4LqoDFRjNxFNEF4xESxGsR">修改的文件</h2>
+            <ul class="file-list" data-page-node-id="SW0ESZNYbnusqhn6BcZGTV">
+                <li data-page-node-id="vjshWqoQosdATYCIlsgF0J"><code data-page-node-id="2Utd75OXYJJOGrP5rDNw2l">app/src/main/res/values/colors.xml</code> 新增 <code data-page-node-id="8yrwXrPX0CiGy2bhbAHUE9">brand_10</code> token</li>
+                <li data-page-node-id="DxhtUNKDo1FkMQIcvHudei"><code data-page-node-id="BF3kSbY4TLHzt7NoBjHWJR">app/src/main/res/values/themes.xml</code> 统一卡片/按钮样式，新增 Primary/Secondary/Pill/FilePoolItem 样式</li>
+                <li data-page-node-id="5yl39mjpC6I0mvsHJByHdE"><code data-page-node-id="PnQPKUuHubWGH0IWczA3he">app/src/main/res/drawable/module_card_background.xml</code> 圆角统一 20dp，加浅色描边</li>
+                <li data-page-node-id="TpKfHZOTNTyL0kATxLA1Xa"><code data-page-node-id="QxguB8pAMYGjMXiR8UqUQn">app/src/main/res/drawable/module_icon_background.xml</code> 改为 brand_10 背景</li>
+                <li data-page-node-id="PRy0vZmLU2661CA84qaYWa"><code data-page-node-id="peDG8O8mwCzFF1UXFdV33t">app/src/main/res/drawable/menu_button_background.xml</code> 改为卡片风格圆角背景</li>
+                <li data-page-node-id="bNsyFbsuGPsCVtJSWlAxoz"><code data-page-node-id="4vFAAJT78xoCEC1XPjwdan">app/src/main/res/drawable/file_pool_pill_background.xml</code> 统一卡片底 + 描边</li>
+                <li data-page-node-id="zj5yTQpVmfxStBC1eMJvuk"><code data-page-node-id="zskxD4mTrRbka9tJtjwMe0">app/src/main/res/drawable/file_thumbnail_background.xml</code> 统一 card 底 + 描边</li>
+                <li data-page-node-id="G6YiGdsAu4qSqoicBdDsoU"><code data-page-node-id="zx8HiUNaZBoP00DB6OFpEP">app/src/main/res/drawable/meta_pill_background.xml</code> / <code data-page-node-id="CMCzRf63M3dB4X22aZjYEx">meta_pill_muted_background.xml</code> 统一 brand_10 底色</li>
+                <li data-page-node-id="zgJZ7aWkOa6v4mnF7BnAmE"><code data-page-node-id="5lyhsPaX4fuG63P3FhLEcU">app/src/main/res/drawable/button_primary_background.xml</code> 新增 Primary 按钮</li>
+                <li data-page-node-id="HBCGbVWpcGRixt9GKBQQQw"><code data-page-node-id="WOZi0MGF9tf6W5n9n1UbfZ">app/src/main/res/drawable/button_secondary_background.xml</code> 新增 Secondary 按钮</li>
+                <li data-page-node-id="btHpyKsMTiY5BSVthOAaSH"><code data-page-node-id="Qcur4SqiK3MF6NUKiD0BjN">app/src/main/res/drawable/file_pool_item_background.xml</code> 新增文件池项卡片</li>
+                <li data-page-node-id="zrB2LLTqYIlH0qjGw0YOUZ"><code data-page-node-id="D3raGxVUtVv4hTYsGiAsfg">app/src/main/res/layout/activity_main.xml</code> 菜单按钮与错误视图视觉统一</li>
+                <li data-page-node-id="77T2gtKjhLxknj9WbHwh2j"><code data-page-node-id="onqpmZeK0w8uDBKqILG65z">app/src/main/res/layout/activity_preprocess.xml</code> 整体重排与样式统一</li>
+                <li data-page-node-id="i5XdP1G3op4hVJKhZuOYj3"><code data-page-node-id="i2RxTxeIznwnDdxXmQu5GT">app/src/main/res/layout/activity_file_pool.xml</code> 标题、空状态、按钮统一</li>
+                <li data-page-node-id="DXG9eHfLBh6X6MxOosfVNG"><code data-page-node-id="raLXB8k1XFAX0ex0osUFFc">app/src/main/res/layout/item_file_pool.xml</code> 增加卡片包裹与统一颜色</li>
+                <li data-page-node-id="HrDJwqz47bDwZrIAljCLMe"><code data-page-node-id="JZmjkFUv5lvEjAx13l2GKv">app/src/main/res/layout/dialog_url_history_item.xml</code> 删除按钮视觉统一</li>
+                <li data-page-node-id="rBVxUhyTk2ORzprUjxOQqe"><code data-page-node-id="NaGlkNdvPSD9AQiGVDeEpD">app/src/main/java/com/hcgy2018/site/FilePoolActivity.kt</code> 占位缩略图颜色对齐 token</li>
+            </ul>
+        </div>
+
+        <div class="card" data-page-node-id="0I4oOXEtdYepNClA3omWZT">
+            <h2 data-page-node-id="PcuSIVE6XVwrBIfBNBFAyr">未改动的套壳区域</h2>
+            <ul class="plain" data-page-node-id="YpJVwvFiWGntqkw5Z0EJVQ">
+                <li data-page-node-id="3E6BFMjkjUWxD9GtO4zU44"><code data-page-node-id="uxBXgwdqBZPrNejPEOeIOx">WebView</code> 本身及加载的网站内容未做任何改动。</li>
+                <li data-page-node-id="WfnOd3VkAIzYfHoUVM2AeA">仅针对 APP 原生提供的菜单入口、错误状态、资源预处理、文件池、调试弹窗进行了视觉统一。</li>
+            </ul>
+        </div>
+
+        <div class="card" data-page-node-id="7ANtfEmDTyMpXlBCvy42cG">
+            <h2 data-page-node-id="aP6K3BU4vPuswAFIC9zOKL">构建结果</h2>
+            <p style="margin: 0 0 12px; color: var(--text-secondary); font-size: 14px;" data-page-node-id="jj8jtC1j3MLRUtEbEJ8p1J">执行 <code data-page-node-id="85QImJm4r4vhq0g7KGo6LS">gradle assembleDebug</code> 验证通过：</p>
+            <span class="success" data-page-node-id="GnwBpvCAnuhXPd3QXqeFB9">BUILD SUCCESSFUL</span>
+        </div>
+    </div>
+</body>
+</html>

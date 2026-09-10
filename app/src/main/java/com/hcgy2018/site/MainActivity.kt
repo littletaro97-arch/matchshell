@@ -40,6 +40,8 @@ import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ListView
+import android.widget.ImageButton
+import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -75,6 +77,13 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+    private val installPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            updateManager.installPendingAfterPermission()
+        }
+
+    private lateinit var updateManager: AppUpdateManager
+
     private val prefs by lazy { getSharedPreferences(PREFS, MODE_PRIVATE) }
 
     private lateinit var productionHost: String
@@ -95,7 +104,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val fileChooser =
+    private val filePoolChooser =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
             val callback = fileCallback ?: return@registerForActivityResult
             fileCallback = null
@@ -112,14 +121,22 @@ class MainActivity : ComponentActivity() {
         web = findViewById(R.id.webview)
         errorView = findViewById(R.id.error_view)
         errorText = findViewById(R.id.error_text)
-        val fab = findViewById<Button>(R.id.reload_fab)
+        val menuButton = findViewById<ImageButton>(R.id.menu_button)
 
         productionHost = getString(R.string.production_host)
+        updateManager = AppUpdateManager(this) {
+            installPermissionLauncher.launch(
+                Intent(
+                    android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        }
 
         if (BuildConfig.DEBUG) WebView.setWebContentsDebuggingEnabled(true)
 
         configureWebView()
-        applyInsets(fab)
+        applyInsets(menuButton)
 
         findViewById<Button>(R.id.retry_button).setOnClickListener {
             retryCount = 0
@@ -127,8 +144,7 @@ class MainActivity : ComponentActivity() {
             web.stopLoading()
             web.loadUrl(currentUrl())
         }
-        fab.setOnClickListener { web.reload() }
-        fab.setOnLongClickListener { showUrlDialog(); true }
+        menuButton.setOnClickListener { showMainMenu(it) }
 
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
 
@@ -151,6 +167,7 @@ class MainActivity : ComponentActivity() {
         })
 
         web.loadUrl(currentUrl())
+        mainHandler.postDelayed({ updateManager.checkAutomatically() }, UPDATE_CHECK_DELAY_MS)
     }
 
     // --- DIAG (仅DEBUG): 完整事件流追踪 ---
@@ -242,7 +259,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun applyInsets(fab: View) {
+    private fun applyInsets(menuButton: View) {
         // 默认隐藏系统栏，实现真正的全屏；用户从顶部/底部滑入可临时显示
         window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         window.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN)
@@ -275,12 +292,31 @@ class MainActivity : ComponentActivity() {
             val bars = insets.getInsets(
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.ime()
             )
-            fab.updateLayoutParams<FrameLayout.LayoutParams> {
+            menuButton.updateLayoutParams<FrameLayout.LayoutParams> {
                 topMargin = (16 * resources.displayMetrics.density).toInt() + bars.top
             }
             insets
         }
         ViewCompat.requestApplyInsets(root)
+    }
+
+    private fun showMainMenu(anchor: View) {
+        PopupMenu(this, anchor).apply {
+            menu.add(getString(R.string.reload)).setOnMenuItemClickListener { web.reload(); true }
+            menu.add(getString(R.string.preprocess_entry)).setOnMenuItemClickListener {
+                startActivity(Intent(this@MainActivity, PreprocessActivity::class.java)); true
+            }
+            menu.add(getString(R.string.menu_file_pool)).setOnMenuItemClickListener {
+                startActivity(Intent(this@MainActivity, FilePoolActivity::class.java)); true
+            }
+            menu.add(getString(R.string.menu_debug_address)).setOnMenuItemClickListener {
+                showUrlDialog(); true
+            }
+            menu.add(getString(R.string.menu_check_update)).setOnMenuItemClickListener {
+                updateManager.checkManually(); true
+            }
+            show()
+        }
     }
 
     private fun download(url: String, disposition: String?, mimeType: String?) {
@@ -671,17 +707,14 @@ class MainActivity : ComponentActivity() {
             fileCallback?.onReceiveValue(null)
             fileCallback = callback
 
-            val intent = try {
-                params.createIntent().apply { putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true) }
-            } catch (e: Exception) {
-                Intent(Intent.ACTION_GET_CONTENT).apply {
-                    type = "*/*"
-                    putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
-                }
+            val intent = Intent(this@MainActivity, FilePoolActivity::class.java).apply {
+                putExtra(FilePoolActivity.EXTRA_SELECT_MODE, true)
+                putExtra(FilePoolActivity.EXTRA_ALLOW_MULTIPLE, params.mode == FileChooserParams.MODE_OPEN_MULTIPLE)
+                putExtra(FilePoolActivity.EXTRA_ACCEPT_TYPES, params.acceptTypes)
             }
 
             return try {
-                fileChooser.launch(intent)
+                filePoolChooser.launch(intent)
                 true
             } catch (e: Exception) {
                 fileCallback = null
@@ -739,6 +772,7 @@ class MainActivity : ComponentActivity() {
         const val PAGE_TIMEOUT_MS = 15_000L
         const val MAX_AUTO_RETRY = 3
         const val AUTO_RETRY_DELAY_MS = 1_500L
+        const val UPDATE_CHECK_DELAY_MS = 3_000L
 
         // 注入 CSS 禁用 WebView 默认的蓝色点击高亮
         private const val DISABLE_TAP_HIGHLIGHT = """

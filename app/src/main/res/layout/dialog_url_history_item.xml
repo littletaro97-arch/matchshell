@@ -16,7 +16,7 @@
         android:layout_weight="1"
         android:ellipsize="end"
         android:maxLines="2"
-        android:textColor="?android:attr/textColorPrimary"
+        android:textColor="@color/text_primary"
         android:textSize="15sp" />
 
     <TextView
@@ -24,10 +24,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
-        android:background="?android:attr/selectableItemBackground"
-        android:padding="8dp"
+        android:background="@drawable/meta_pill_background"
+        android:paddingStart="10dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="4dp"
         android:text="@string/delete"
-        android:textColor="@android:color/holo_red_dark"
-        android:textSize="14sp" />
+        android:textColor="@color/brand"
+        android:textSize="14sp"
+        android:textStyle="bold" />
 
 </LinearLayout>

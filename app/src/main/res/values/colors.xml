@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#F5EFE6</color>
-    <color name="brand">#C2410C</color>
+    <color name="brand">#A65E44</color>
+    <color name="text_primary">#2D2A26</color>
+    <color name="text_secondary">#6B655D</color>
+    <color name="text_tertiary">#8A837A</color>
+    <color name="card_background">#E8E4DA</color>
+    <color name="card_pressed">#DDD9CF</color>
+
+    <!-- Brand color at 10% opacity, used for icon backgrounds and subtle accents -->
+    <color name="brand_10">#1AA65E44</color>
 </resources>

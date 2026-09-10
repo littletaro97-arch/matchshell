@@ -1,15 +1,64 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">火柴公益</string>
-
     <!-- 默认打开的网址。安装后长按右上角「刷新」按钮可随时改。 -->
     <string name="default_url">https://hcgy2018.site/</string>
 
     <string name="reload">刷新</string>
+    <string name="menu">功能菜单</string>
+    <string name="menu_file_pool">文件池</string>
+    <string name="menu_debug_address">调试地址</string>
+    <string name="menu_check_update">检查更新</string>
+    <string name="preprocess_entry">资源预处理</string>
+    <string name="preprocess_title">资源预处理</string>
+    <string name="preprocess_subtitle">文件只在本机处理，不上传服务器</string>
+    <string name="file_pool_go">前往文件池</string>
+    <string name="photo_compress">照片压缩</string>
+    <string name="photo_compress_hint">缩放至最长边 1920 px，导出 JPEG（质量 82）</string>
+    <string name="photo_compress_meta">本地处理 · 保持画质</string>
+    <string name="video_compress">视频压缩</string>
+    <string name="video_compress_hint">转为 720p H.264/AAC MP4；处理期间请保持此页面打开</string>
+    <string name="video_compress_meta">注意：请勿切出应用</string>
+    <string name="ppt_convert">PPT 转 PDF</string>
+    <string name="ppt_convert_hint">PDF 验证版可在本机转换 DOCX、PPTX、XLSX；轻量版不包含转换引擎</string>
+    <string name="cancel_processing">取消处理</string>
+    <string name="processing_idle">请选择文件开始处理</string>
+    <string name="processing_idle_with_version">请选择文件开始处理（%1$s）</string>
+    <string name="processing_photo">正在压缩照片…</string>
+    <string name="processing_video">正在压缩视频… %1$d%%</string>
+    <string name="processing_video_unknown">正在压缩视频…</string>
+    <string name="processing_saving">处理完成，正在写入文件池…</string>
+    <string name="processing_done">已存入文件池：%1$s → %2$s</string>
+    <string name="processing_cancelled">处理已取消</string>
+    <string name="processing_failed">处理失败：%1$s</string>
+    <string name="file_pool_title">文件池</string>
+    <string name="file_pool_empty">文件池为空。完成照片或视频压缩后，文件会自动出现在这里。</string>
+    <string name="file_pool_browse">浏览其他文件</string>
+    <string name="file_pool_saved">已保存到 Downloads/火柴公益文件池</string>
+    <string name="file_pool_android_too_old">自动文件池需要 Android 10 或更高版本</string>
+    <string name="file_preview">文件预览图</string>
+    <string name="file_delete_title">删除文件</string>
+    <string name="file_delete_message">确定从文件池和手机存储中删除“%1$s”吗？此操作不能撤销。</string>
+    <string name="file_delete_failed">删除失败，文件可能已移动或系统拒绝访问</string>
+    <string name="office_convert">文件转 PDF</string>
+    <string name="office_convert_hint">支持 DOCX、PPTX、XLSX，在本机离线生成 PDF</string>
+    <string name="office_convert_meta">DOCX · PPTX · XLSX</string>
+    <string name="processing_office">正在转换文档，请保持页面打开…</string>
+    <string name="office_unsupported">暂不支持此格式：.%1$s</string>
+    <string name="office_engine_missing">当前安装的是轻量版，不包含文件转 PDF 引擎</string>
     <string name="retry">重试</string>
     <string name="delete">删除</string>
     <string name="download_started">已开始下载，见通知栏</string>
     <string name="download_no_notification_permission">未授予通知权限，下载仍会进行，但可能不会显示完成通知</string>
+    <string name="update_is_latest">当前已是最新版本</string>
+    <string name="update_check_failed">检查更新失败：%1$s</string>
+    <string name="update_available_title">发现新版本</string>
+    <string name="update_available_message">版本 %1$s · %2$s</string>
+    <string name="update_now">立即更新</string>
+    <string name="update_later">稍后提醒</string>
+    <string name="update_downloading">正在下载更新…</string>
+    <string name="update_download_failed">更新下载失败：%1$s</string>
+    <string name="update_install_failed">安装更新失败：%1$s</string>
+    <string name="update_size_unknown">大小未知</string>
 
     <string name="error_template">%1$s\n\n确认服务器在运行，或长按右上角「刷新」改地址。</string>
     <string name="error_timeout">加载超时：服务器没有响应。</string>

@@ -1,0 +1,145 @@
+name: Publish stable APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_name:
+        description: Version name, for example 1.0.1
+        required: true
+      version_code:
+        description: Increasing integer version code
+        required: true
+        type: number
+      release_notes:
+        description: Release notes
+        required: true
+        type: string
+      rollout_percent:
+        description: Percentage of devices offered the update
+        required: true
+        default: 100
+        type: number
+      minimum_supported_version_code:
+        description: Versions below this value must update
+        required: true
+        default: 100
+        type: number
+      mandatory:
+        description: Require all eligible users to update
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: stable-release
+  cancel-in-progress: false
+
+jobs:
+  validate-build-release:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Validate release inputs
+        env:
+          VERSION_CODE: ${{ inputs.version_code }}
+          ROLLOUT_PERCENT: ${{ inputs.rollout_percent }}
+          MINIMUM_SUPPORTED: ${{ inputs.minimum_supported_version_code }}
+        run: |
+          test "$VERSION_CODE" -ge 100
+          test "$ROLLOUT_PERCENT" -ge 0
+          test "$ROLLOUT_PERCENT" -le 100
+          test "$MINIMUM_SUPPORTED" -ge 1
+
+      - name: Restore signing material
+        env:
+          KEYSTORE_BASE64: ${{ secrets.MATCHSHELL_KEYSTORE_BASE64 }}
+          UPDATE_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY_PEM }}
+        run: |
+          test -n "$KEYSTORE_BASE64"
+          test -n "$UPDATE_PRIVATE_KEY"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/matchshell-release.keystore"
+          printf '%s' "$UPDATE_PRIVATE_KEY" > "$RUNNER_TEMP/update-private.pem"
+          chmod 600 "$RUNNER_TEMP/matchshell-release.keystore" "$RUNNER_TEMP/update-private.pem"
+
+      - name: Build and verify
+        env:
+          MATCHSHELL_KEYSTORE_FILE: ${{ runner.temp }}/matchshell-release.keystore
+          MATCHSHELL_KEYSTORE_PASSWORD: ${{ secrets.MATCHSHELL_KEYSTORE_PASSWORD }}
+          MATCHSHELL_KEY_ALIAS: ${{ secrets.MATCHSHELL_KEY_ALIAS }}
+          MATCHSHELL_KEY_PASSWORD: ${{ secrets.MATCHSHELL_KEY_PASSWORD }}
+        run: |
+          gradle clean lintPdfRelease assemblePdfRelease \
+            -PVERSION_NAME='${{ inputs.version_name }}' \
+            -PVERSION_CODE='${{ inputs.version_code }}'
+
+      - name: Prepare release asset and signed update manifest
+        id: manifest
+        env:
+          VERSION_NAME: ${{ inputs.version_name }}
+          VERSION_CODE: ${{ inputs.version_code }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+          ROLLOUT_PERCENT: ${{ inputs.rollout_percent }}
+          MINIMUM_SUPPORTED: ${{ inputs.minimum_supported_version_code }}
+          MANDATORY: ${{ inputs.mandatory }}
+        run: |
+          tag="v${VERSION_NAME}"
+          asset="matchshell-${tag}-arm64.apk"
+          mkdir -p public/updates release
+          cp app/build/outputs/apk/pdf/release/app-pdf-release.apk "release/$asset"
+          sha="$(sha256sum "release/$asset" | cut -d' ' -f1)"
+          size="$(stat -c%s "release/$asset")"
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${tag}/${asset}"
+          jq -n \
+            --arg versionName "$VERSION_NAME" \
+            --argjson versionCode "$VERSION_CODE" \
+            --argjson minimumSupportedVersionCode "$MINIMUM_SUPPORTED" \
+            --arg apkUrl "$url" \
+            --arg sha256 "$sha" \
+            --argjson size "$size" \
+            --argjson mandatory "$MANDATORY" \
+            --argjson rolloutPercent "$ROLLOUT_PERCENT" \
+            --arg releaseNotes "$RELEASE_NOTES" \
+            '{schemaVersion:1, versionCode:$versionCode, versionName:$versionName, minimumSupportedVersionCode:$minimumSupportedVersionCode, apkUrl:$apkUrl, sha256:$sha256, size:$size, mandatory:$mandatory, rolloutPercent:$rolloutPercent, releaseNotes:[$releaseNotes]}' \
+            > public/updates/stable.json
+          openssl dgst -sha256 -sign "$RUNNER_TEMP/update-private.pem" -out "$RUNNER_TEMP/stable.sig" public/updates/stable.json
+          base64 -w0 "$RUNNER_TEMP/stable.sig" > public/updates/stable.json.sig
+          printf '<!doctype html><meta charset="utf-8"><title>MatchShell updates</title><p>MatchShell stable update service.</p>' > public/index.html
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+
+      - name: Create immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          gh release create '${{ steps.manifest.outputs.tag }}' \
+            "release/${{ steps.manifest.outputs.asset }}" \
+            --title '${{ steps.manifest.outputs.tag }}' \
+            --notes "$RELEASE_NOTES" \
+            --latest
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+      - name: Deploy signed update manifest
+        id: pages
+        uses: actions/deploy-pages@v4

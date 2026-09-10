@@ -70,11 +70,11 @@
 - `androidx.core:core-ktx`
 - `androidx.activity:activity-ktx:1.10.1`
 - `androidx.lifecycle:lifecycle-*`
-- **无 appcompat**
+- **无 appcompat**；资源预处理新增 ExifInterface 与 Media3 Transformer/Effect/Common
 
 ### 构建版本
 - AGP 8.9.2 + Kotlin 2.1.21 + JDK 21 + Gradle 8.11.1（取自本机缓存，无 wrapper 脚本）
-- minSdk 26 / targetSdk 35
+- compileSdk 36 / minSdk 26 / targetSdk 35
 
 ## 构建
 
@@ -161,3 +161,13 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - `BuildConfig.DEBUG` 下开启 WebView 远程调试（`chrome://inspect`）
 - 旋转不重建 Activity（manifest `configChanges`）
 - 触摸全链路诊断日志（`ACT` / `WV` / `WV LOAD` / `WV PGSTART` / `WV PGFIN` / `WV ERR`）
+- 独立原生「资源预处理」板块：照片 EXIF 校正与 JPEG 压缩；视频经 Media3 转为 720p H.264/AAC MP4，并支持进度、取消和系统文件保存器输出
+- 资源预处理结果自动写入 Android 10+ 公共目录 `Downloads/火柴公益文件池`；网页上传选择器默认先展示该池，并允许继续浏览系统文件
+- v0.2.0 只完成 Office 容器探测；该历史边界已由 v0.3.0 的可选开源转换引擎推进，Windows LibreOffice `soffice` 仍未直接集成到 Android APK
+- v0.3.0 使用 `lite` / `pdf` product flavor：Lite 为 `0.3.0-lite`/30，不含转换 `.so`；PDF 为 `0.3.0-pdf`/31，arm64 下支持 DOCX/PPTX/XLSX→PDF。两版均使用文件池网格缩略图与长按确认删除。
+# 当前产品线
+
+- 从 `0.4.0-pdf` 起只维护 PDF 转换能力，不再继续开发或交付 Lite 变体。
+- 首个正式稳定版使用 `com.hcgy2018.site`；不得重新添加 `.pdf` 后缀。
+- 正式版本从 `1.0.0` / versionCode `100` 起步，后续 versionCode 必须严格递增并保持同一发布证书。
+- 稳定发布通过 `.github/workflows/release.yml` 手动触发；真机更新链未验收前不得创建稳定 Release。

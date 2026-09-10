@@ -3,10 +3,10 @@
 一个只有 WebView 的 Android 壳，用于在手机上全屏查看火柴公益网站（去掉浏览器地址栏/工具栏），
 方便移动端 debug。不是给外部用户用的产品，是开发者的查看器。
 
-- 包名 `com.hcgy2018.site`
+- 正式包名 `com.hcgy2018.site`
 - minSdk 26（Android 8.0）／targetSdk 35
-- 版本号 `0.1.0` / versionCode `1`
-- 依赖只有 `core-ktx` + `activity-ktx`（最小化，能不要 appcompat 就不要）
+- 当前稳定版基线：`1.0.0` / versionCode `100`，只维护 PDF 转换变体
+- UI 仍保持无 appcompat；资源预处理使用 AndroidX ExifInterface 与 Media3 Transformer
 - 默认打开 `https://hcgy2018.site/`（在 `res/values/strings.xml` 里改）
 
 ## 上游网站关系
@@ -40,8 +40,32 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 | **长按**「刷新」 | 弹出最近 5 条调试地址，点击直接加载；选「手动输入…」可新增地址 |
 | 返回键 | 网页内后退；若网站通过 `MatchShell.setBackHandler` 注册处理器，优先由网站决定 |
 | 下载文件 | Android 13+ 会先申请通知权限；中文文件名使用 `filename*` 解码 |
+| 点左上角「资源预处理」 | 进入本机照片/视频压缩板块；文件不会上传服务器 |
+
+## 资源预处理（首版）
+
+- 照片：校正 EXIF 旋转，最长边限制为 1920 px，导出 JPEG（质量 82）。
+- 视频：使用 Android 官方 Media3 Transformer 转为 720p H.264/AAC MP4，支持进度与取消。
+- PPT 转 PDF：入口仅说明能力边界，尚未实现。网站依赖 Windows LibreOffice `soffice`，不能直接打入 Android APK；需独立验证可信的 Android 文档渲染方案。
+- 输出自动写入公共目录 `Downloads/火柴公益文件池`；中间文件位于 APP 缓存，完成或取消后清理。
+- 网页触发文件上传时默认先进入 APP 文件池，仍可点“浏览其他文件”回到系统选择器。
+- 自动文件池基于 Android 10+ MediaStore；当前目标设备 Android 16 在支持范围内。
+
+### v1.0.0 PDF 转换版
+
+- 后续只维护 PDF 转换版：包含照片/视频压缩、文件池网格缩略图、长按删除及 arm64 端侧 DOCX/PPTX/XLSX→PDF。
+- 资源预处理页采用 WorkBuddy HTML 原型的暖米色卡片布局，卡片和“前往文件池”均已连接现有原生功能。
+- PDF 转换引擎来自 Apache-2.0 `office2pdf` 的 Android JNI 构建；输入上限 64 MiB，复杂排版属于待实机验证范围。
 
 改网址是核心用法：局域网调试时填 `http://192.168.x.x:8880/`，正式站填 `https://hcgy2018.site/`。
+
+## APP 内更新
+
+- 启动 3 秒后后台检查，每 24 小时最多自动检查一次；右上角菜单可手动“检查更新”。
+- 更新清单：`https://littletaro97-arch.github.io/matchshell/updates/stable.json`。
+- APK 来自 GitHub Releases；下载后校验清单 RSA 签名、APK SHA-256、包名、versionCode 和签名证书。
+- Android 8+ 首次更新需要允许本 APP 安装未知来源，安装动作仍由系统确认。
+- 发布步骤和 GitHub Secrets 见 [docs/github-update-release.md](docs/github-update-release.md)。
 
 ### JS 桥接（网站侧）
 
