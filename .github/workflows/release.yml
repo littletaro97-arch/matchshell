@@ -150,7 +150,7 @@ jobs:
 
           release_json="$(curl --fail-with-body --silent --show-error \
             --request POST \
-            --header "Authorization: token $GITEE_ACCESS_TOKEN" \
+            --header "Authorization: Bearer $GITEE_ACCESS_TOKEN" \
             --data-urlencode "tag_name=$TAG" \
             --data-urlencode "name=$TAG" \
             --data-urlencode "body=$RELEASE_NOTES" \
@@ -160,7 +160,7 @@ jobs:
 
           asset_json="$(curl --fail-with-body --silent --show-error \
             --request POST \
-            --header "Authorization: token $GITEE_ACCESS_TOKEN" \
+            --header "Authorization: Bearer $GITEE_ACCESS_TOKEN" \
             --form "file=@release/$ASSET" \
             "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPOSITORY/releases/$release_id/attach_files")"
           download_url="$(jq -er '.browser_download_url' <<<"$asset_json")"
