@@ -107,7 +107,18 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "size=$size" >> "$GITHUB_OUTPUT"
 
-      - name: Synchronize source to Gitee
+      - name: Create immutable GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          gh release create '${{ steps.release.outputs.tag }}' \
+            "release/${{ steps.release.outputs.asset }}" \
+            --title '${{ steps.release.outputs.tag }}' \
+            --notes "$RELEASE_NOTES" \
+            --latest
+
+      - name: Synchronize source and release tag to Gitee
         env:
           GITEE_ACCESS_TOKEN: ${{ secrets.GITEE_ACCESS_TOKEN }}
           GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
@@ -119,20 +130,10 @@ jobs:
           test -n "$GITEE_OWNER"
           test -n "$GITEE_REPOSITORY"
           auth="$(printf '%s' "$GITEE_USERNAME:$GITEE_ACCESS_TOKEN" | base64 -w0)"
+          git fetch origin 'refs/tags/${{ steps.release.outputs.tag }}:refs/tags/${{ steps.release.outputs.tag }}'
           git -c "http.extraHeader=Authorization: Basic $auth" push \
             "https://gitee.com/$GITEE_OWNER/$GITEE_REPOSITORY.git" \
-            HEAD:main --follow-tags
-
-      - name: Create immutable GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_NOTES: ${{ inputs.release_notes }}
-        run: |
-          gh release create '${{ steps.release.outputs.tag }}' \
-            "release/${{ steps.release.outputs.asset }}" \
-            --title '${{ steps.release.outputs.tag }}' \
-            --notes "$RELEASE_NOTES" \
-            --latest
+            HEAD:main 'refs/tags/${{ steps.release.outputs.tag }}' --force
 
       - name: Publish APK to Gitee Release
         id: gitee
@@ -148,22 +149,17 @@ jobs:
           test -n "$GITEE_OWNER"
           test -n "$GITEE_REPOSITORY"
 
-          release_json="$(curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer $GITEE_ACCESS_TOKEN" \
-            --data-urlencode "tag_name=$TAG" \
-            --data-urlencode "name=$TAG" \
-            --data-urlencode "body=$RELEASE_NOTES" \
-            --data-urlencode "target_commitish=$GITHUB_SHA" \
-            "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPOSITORY/releases")"
-          release_id="$(jq -er '.id' <<<"$release_json")"
-
-          asset_json="$(curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header "Authorization: Bearer $GITEE_ACCESS_TOKEN" \
-            --form "file=@release/$ASSET" \
-            "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPOSITORY/releases/$release_id/attach_files")"
-          download_url="$(jq -er '.browser_download_url' <<<"$asset_json")"
+          deadline=$((SECONDS + 1200))
+          download_url=""
+          while (( SECONDS < deadline )); do
+            release_json="$(curl --fail --silent --show-error --connect-timeout 15 --max-time 60 \
+              --header "Authorization: Bearer $GITEE_ACCESS_TOKEN" \
+              "https://gitee.com/api/v5/repos/$GITEE_OWNER/$GITEE_REPOSITORY/releases/tags/$TAG" 2>/dev/null || true)"
+            download_url="$(jq -r --arg name "$ASSET" '.assets[]? | select(.name == $name) | .browser_download_url' <<<"${release_json:-{}}" | head -n1)"
+            [[ -n "$download_url" ]] && break
+            sleep 15
+          done
+          test -n "$download_url"
           case "$download_url" in
             https://gitee.com/*) ;;
             *) echo "Unexpected Gitee download URL" >&2; exit 1 ;;

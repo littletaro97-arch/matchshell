@@ -26,7 +26,9 @@
 
 私钥、keystore 和 Gitee 令牌不得提交到 Git。发布工作流通过 GitHub Actions 的 `Publish stable APK` 手动触发，输入版本名称、递增 versionCode、发布说明、灰度比例、最低支持版本和强制更新开关。
 
-工作流会在 GitHub 创建 Release 作为归档，同时将同一 APK 上传到 Gitee Release。签名更新清单仍由 GitHub Pages 提供，但其中 `apkUrl` 使用 Gitee 返回的真实附件下载地址。这样现有客户端无需更换清单入口，即可从下一次发布开始走 Gitee 下载。
+GitHub 工作流负责构建、签名并创建 GitHub Release，然后把对应标签同步到 Gitee。Gitee Go 读取 `.workflow/gitee-release.yml`，在国内执行 `tools/publish-gitee-release.sh`：下载已签名 APK、幂等创建或复用 Gitee Release，并上传附件。GitHub 工作流只轮询 Gitee 附件；附件出现后才生成并部署签名更新清单，其中 `apkUrl` 使用 Gitee 的真实下载地址。
+
+Gitee Go 首次使用需要在仓库网页中开通流水线，并把 `GITEE_ACCESS_TOKEN` 配置为加密环境变量。不得把令牌直接写入 YAML 或仓库。流水线由 `v*` 标签触发；上传脚本带连接/总超时、有限重试和重复附件检测。若 Gitee 上传失败，GitHub Pages 上的稳定清单保持上一版本。
 
 ## 首次接入 Gitee
 
