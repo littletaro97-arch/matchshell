@@ -36,11 +36,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 | 操作 | 效果 |
 |---|---|
-| 点右下角半透明「刷新」 | 重新加载当前页 |
-| **长按**「刷新」 | 弹出最近 5 条调试地址，点击直接加载；选「手动输入…」可新增地址 |
+| 点右上角菜单 | 刷新 / 资源预处理 / 文件池 / 改调试地址 / 检查更新 |
+| 菜单 →「改调试地址」 | 弹出最近 5 条历史地址，点击直接加载；每条右侧「×」可单条删除；选「手动输入…」可新增 |
 | 返回键 | 网页内后退；若网站通过 `MatchShell.setBackHandler` 注册处理器，优先由网站决定 |
 | 下载文件 | Android 13+ 会先申请通知权限；中文文件名使用 `filename*` 解码 |
-| 点左上角「资源预处理」 | 进入本机照片/视频压缩板块；文件不会上传服务器 |
 
 ## 资源预处理（首版）
 
@@ -83,6 +82,28 @@ window.onMatchShellBack = function() {
 ```
 
 也可调用 `window.MatchShell.finishApp()` 主动退出、`window.MatchShell.reload()` 刷新。
+`window.MatchShell.getAppVersion()` 返回壳版本（如 `1.0.0`），`isMatchShell()` 恒为 true。
+
+## 网站识别壳（APP 模式的基础）
+
+壳向暴露两层信息，网站据此渲染 APP 模式（隐藏顶部导航、底部固定入口、放大触摸目标）：
+
+1. **User-Agent**：系统默认 UA 末尾追加 `MatchShell/<版本名>`，例如
+   `Mozilla/5.0 (Linux; Android 16; PKT110 ...) ... Chrome/151.0.7922.199 ... MatchShell/1.0.0`。
+   服务端可据此直接在模板上输出 `data-app-mode`，**不需要等 JS 执行**，是首选判定方式。
+2. **JS 桥接**：页面内 `typeof window.MatchShell !== "undefined"` 即表示在壳内运行。
+
+另外，壳会在每个页面的 `<html>` 上写入安全区变量（单位 CSS px，随旋转/挖孔变化自动更新）：
+
+```css
+.bottom-nav {
+    padding-bottom: calc(12px + var(--ms-safe-bottom, 0px));
+}
+```
+
+可用变量：`--ms-safe-top` / `--ms-safe-bottom` / `--ms-safe-left` / `--ms-safe-right`。
+取值为"忽略系统栏可见性"的 insets，所以用户临时滑出系统栏时底部条不会跟着跳动。
+壳是全屏沉浸式，手势条区域常驻，底部固定元素必须避让，否则会被手势条压住。
 
 ## 为什么不用 PWA
 

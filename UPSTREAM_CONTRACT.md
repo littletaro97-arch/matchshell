@@ -28,6 +28,19 @@ MatchShell 是火柴公益网站的独立 Android WebView 承载端，不是网�
 - 每次联调记录 APK SHA-256、网站版本/commit、设备、WebView provider 版本和首页/资源页/登录/上传下载结果。
 - APK 本地构建与网站自动化不等于设备验收，也不授权服务器部署或 Release。
 
+## 壳标识与安全区约定（2026-09-10 起）
+
+网站如需为壳渲染 APP 模式，按下面两条契约对接，不需要 MatchShell 再改代码：
+
+1. **判定是否在壳内**：请求 UA 末尾是否含 `MatchShell/<版本名>`（如 `MatchShell/1.0.0`）。
+   服务端读到即可在模板输出 `data-app-mode`，首屏生效、不依赖 JS。
+   客户端也可用 `typeof window.MatchShell !== "undefined"` 判断。
+2. **避让手势条**：壳会在每个页面的 `<html>` 上写入 `--ms-safe-top` / `--ms-safe-bottom` /
+   `--ms-safe-left` / `--ms-safe-right`（CSS px，随旋转和挖孔自动更新）。
+   底部固定元素用 `calc(基准值 + var(--ms-safe-bottom, 0px))` 做下边距，否则会被手势条压住。
+
+以上变量与 UA token 由壳单向提供给网站；网站不得假设壳会读取任何页面 DOM 或 Cookie 来反向判断。
+
 ## 上游变更处理
 
 先查看上游契约，再评估 MatchShell 是否需要改动；不要通过软链接、复制网站目录或直接读取网站运行数据来“同步”。

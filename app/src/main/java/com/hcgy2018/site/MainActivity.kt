@@ -45,6 +45,7 @@ import android.widget.PopupMenu
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import kotlin.math.roundToInt
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.ViewCompat
@@ -93,6 +94,12 @@ class MainActivity : ComponentActivity() {
     private var retryCount = 0
     private var autoRetryPending = false
     private var lastFailedUrl: String? = null
+
+    // 安全区（CSS px），供网站底部固定元素避让手势条/刘海
+    private var safeAreaTop = 0
+    private var safeAreaBottom = 0
+    private var safeAreaLeft = 0
+    private var safeAreaRight = 0
 
     private val connectivityManager by lazy {
         getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -233,6 +240,13 @@ class MainActivity : ComponentActivity() {
             savePassword = false
             @Suppress("DEPRECATION")
             saveFormData = false
+
+            // 让网站能识别 MatchShell：保留系统默认 UA，只在末尾追加产品 token。
+            // 网站据此渲染 APP 模式（隐藏顶部导航、底部固定入口、放大触摸目标）。
+            val baseUa = userAgentString
+            if (baseUa.contains(UA_PRODUCT).not()) {
+                userAgentString = "$baseUa $UA_TOKEN"
+            }
         }
         web.webViewClient = ShellWebViewClient()
         web.webChromeClient = ShellChromeClient()
@@ -295,9 +309,43 @@ class MainActivity : ComponentActivity() {
             menuButton.updateLayoutParams<FrameLayout.LayoutParams> {
                 topMargin = (16 * resources.displayMetrics.density).toInt() + bars.top
             }
+
+            // 安全区用"忽略可见性"的 insets：系统栏是临时滑入的，
+            // 用可见性会让它一进一出导致页面底部固定条跟着跳。
+            val stable = insets.getInsetsIgnoringVisibility(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            updateSafeArea(stable.top, stable.bottom, stable.left, stable.right)
             insets
         }
         ViewCompat.requestApplyInsets(root)
+    }
+
+    /**
+     * 记录安全区（CSS px）并注入给当前页面。
+     * 网站底部固定元素加 `padding-bottom: var(--ms-safe-bottom, 0px)` 即可避开手势条。
+     */
+    private fun updateSafeArea(top: Int, bottom: Int, left: Int, right: Int) {
+        val density = resources.displayMetrics.density
+        fun toCssPx(px: Int) = (px / density).roundToInt()
+        safeAreaTop = toCssPx(top)
+        safeAreaBottom = toCssPx(bottom)
+        safeAreaLeft = toCssPx(left)
+        safeAreaRight = toCssPx(right)
+        applySafeAreaCssVars()
+    }
+
+    private fun applySafeAreaCssVars() {
+        if (!::web.isInitialized) return
+        val js = "(function(){" +
+            "var r=document.documentElement;" +
+            "if(!r)return;" +
+            "r.style.setProperty('--ms-safe-top','${safeAreaTop}px');" +
+            "r.style.setProperty('--ms-safe-bottom','${safeAreaBottom}px');" +
+            "r.style.setProperty('--ms-safe-left','${safeAreaLeft}px');" +
+            "r.style.setProperty('--ms-safe-right','${safeAreaRight}px');" +
+            "})();"
+        web.evaluateJavascript(js, null)
     }
 
     private fun showMainMenu(anchor: View) {
@@ -679,6 +727,8 @@ class MainActivity : ComponentActivity() {
             hideError()
             // 移除 WebView 默认的蓝色点击高亮，让体验更接近原生 APP
             view.evaluateJavascript(DISABLE_TAP_HIGHLIGHT, null)
+            // 每个新文档都要重新注入：上页设置的行内样式会随导航丢掉
+            applySafeAreaCssVars()
         }
 
         override fun onReceivedError(
@@ -750,6 +800,14 @@ class MainActivity : ComponentActivity() {
             backHandlerName = name?.takeIf { it.isNotBlank() }
         }
 
+        /** 壳版本名，形如 `1.0.0`；网站可按版本决定用哪些能力 */
+        @JavascriptInterface
+        fun getAppVersion(): String = BuildConfig.VERSION_NAME
+
+        /** 恒为 true；配合 `typeof window.MatchShell` 判断页面是否在壳内运行 */
+        @JavascriptInterface
+        fun isMatchShell(): Boolean = true
+
         /** 退出 APP */
         @JavascriptInterface
         fun finishApp() {
@@ -764,6 +822,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private companion object {
+        /** UA 产品名；网站用 UA 里是否含它来判断是否处于壳内 */
+        const val UA_PRODUCT = "MatchShell"
+
+        /** 追加到系统默认 UA 末尾的 token，形如 `MatchShell/1.0.0` */
+        val UA_TOKEN = "$UA_PRODUCT/${BuildConfig.VERSION_NAME}"
+
         const val PREFS = "shell"
         const val KEY_URL = "url"
         const val KEY_URL_HISTORY = "url_history"

@@ -168,6 +168,10 @@ web.settings.userAgentString = "$originalUA MatchShell/0.1.0"
 
 ### 2.6 建议落地顺序
 
+> 2026-09-10 进度：第 1 步已在壳侧完成（默认 UA 末尾追加 `MatchShell/<版本名>`，桥接新增
+> `getAppVersion()` / `isMatchShell()`，并向页面注入 `--ms-safe-*` 安全区变量）。
+> 第 2 步属于网站侧改动，接口约定见 `UPSTREAM_CONTRACT.md`「壳标识与安全区约定」。
+
 1. **现在做**：APP 加自定义 User-Agent，暴露 `window.MatchShell` 可用状态。
 2. **短期做**：网站根据 UA 隐藏顶部 header、底部加 3~5 个关键入口、放大触摸目标。
 3. **中期观察**：如果 APP 真的变成主要入口，再考虑把"资源首页"做成更独立的 SPA 页面（仍在 WebView 里）。

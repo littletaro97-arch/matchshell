@@ -151,6 +151,8 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 ## 已实现的壳能力
 
 - 沉浸式全屏（状态栏/导航栏隐藏，内容延伸至刘海/挖孔/手势区域；在华为/荣耀等 OEM 上额外加 `FLAG_FULLSCREEN` + `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` 兜底）
+- 壳标识：默认 UA 末尾追加 `MatchShell/<版本名>`；JS 桥接提供 `getAppVersion()` / `isMatchShell()`
+- 安全区注入：每个页面在 `<html>` 上写入 `--ms-safe-top/bottom/left/right`（CSS px，取"忽略系统栏可见性"的 insets，含挖孔）
 - 长按改 URL，支持最近 5 条历史地址（SharedPreferences 持久化）
 - 系统返回键：优先网站 JS 处理器，否则 `webView.goBack()` / `finish()`
 - 同 host 留 WebView，跳 host 用外部浏览器
