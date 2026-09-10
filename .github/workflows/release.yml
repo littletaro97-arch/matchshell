@@ -130,11 +130,21 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
-          gh release create '${{ steps.manifest.outputs.tag }}' \
-            "release/${{ steps.manifest.outputs.asset }}" \
-            --title '${{ steps.manifest.outputs.tag }}' \
-            --notes "$RELEASE_NOTES" \
-            --latest
+          if gh release view '${{ steps.manifest.outputs.tag }}' >/dev/null 2>&1; then
+            mkdir -p "$RUNNER_TEMP/existing-release"
+            gh release download '${{ steps.manifest.outputs.tag }}' \
+              --pattern '${{ steps.manifest.outputs.asset }}' \
+              --dir "$RUNNER_TEMP/existing-release"
+            cmp --silent \
+              "release/${{ steps.manifest.outputs.asset }}" \
+              "$RUNNER_TEMP/existing-release/${{ steps.manifest.outputs.asset }}"
+          else
+            gh release create '${{ steps.manifest.outputs.tag }}' \
+              "release/${{ steps.manifest.outputs.asset }}" \
+              --title '${{ steps.manifest.outputs.tag }}' \
+              --notes "$RELEASE_NOTES" \
+              --latest
+          fi
 
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
