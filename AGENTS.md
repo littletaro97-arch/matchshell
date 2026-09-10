@@ -159,12 +159,18 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - 本地调试时自动把页面内 `hcgy2018.site` 硬编码链接重定向到当前调试地址
 - `onShowFileChooser` 文件多选上传
 - `DownloadManager` 下载（Android 13+ 通知权限 + cookie + RFC 5987 中文文件名）
-- 加载超时 / 错误分类 / 网络恢复自动重试（最多 3 次）
+- 加载超时 / 错误分类；**重连策略为「C+D」**：不做定时重试，只在 `ConnectivityManager` 报告网络可用/切换时自动重试一次（间隔 ≥30 秒冷却）；`onReceivedHttpError`（服务器已应答）不自动重试；手动重试在加载期间禁用按钮防叠加。原有的定时重试（1.5 秒 × 3 次）已移除
+- 文件池「导入 PDF」入口：已有 PDF 直接进池，不经转换引擎；`PreprocessActivity` 的「文件转 PDF」选到 PDF 时也走同一条导入路径
+- PDF 无损压缩**未接入**：实测用户样本（112 页课件，图片占体积 82.5%）无损结构优化仅 −2.4%，判断为不值得引入 qpdf native 库；若后续要压缩，唯一稳妥路径是 qpdf arm64 交叉编译 + JNI
 - `BuildConfig.DEBUG` 下开启 WebView 远程调试（`chrome://inspect`）
 - 旋转不重建 Activity（manifest `configChanges`）
 - 触摸全链路诊断日志（`ACT` / `WV` / `WV LOAD` / `WV PGSTART` / `WV PGFIN` / `WV ERR`）
 - 独立原生「资源预处理」板块：照片 EXIF 校正与 JPEG 压缩；视频经 Media3 转为 720p H.264/AAC MP4，并支持进度、取消和系统文件保存器输出
-- 资源预处理结果自动写入 Android 10+ 公共目录 `Downloads/火柴公益文件池`；网页上传选择器默认先展示该池，并允许继续浏览系统文件
+- 资源预处理结果写入 **APP 私有目录**（`getExternalFilesDir(DIRECTORY_DOWNLOADS)/火柴公益文件池`，回退 `filesDir`），
+  经 `FileProvider`（authority `${applicationId}.fileprovider`）以 content URI 提供给 WebView；路径映射见 `res/xml/file_paths.xml`
+- 网页上传**只能从文件池选**：已删除「浏览其他文件」入口与 `ACTION_OPEN_DOCUMENT` 回调；多选模式改成池内勾选 + 「提交已选」按钮
+- 文件池私有化的原因：公共 Downloads 里的照片/视频会被相册收录，用户设备上会出现两份同款文件；私有目录既不进相册也不进最近列表，代价是卸载即删（页面有常驻提示，不可删）
+- `PreprocessActivity` 与 `FilePoolActivity` 均按 `systemBars ∪ displayCutout` 的 insets 动态加内边距（`setDecorFitsSystemWindows(false)`），避免标题被前摄/状态栏压住
 - v0.2.0 只完成 Office 容器探测；该历史边界已由 v0.3.0 的可选开源转换引擎推进，Windows LibreOffice `soffice` 仍未直接集成到 Android APK
 - v0.3.0 使用 `lite` / `pdf` product flavor：Lite 为 `0.3.0-lite`/30，不含转换 `.so`；PDF 为 `0.3.0-pdf`/31，arm64 下支持 DOCX/PPTX/XLSX→PDF。两版均使用文件池网格缩略图与长按确认删除。
 # 当前产品线

@@ -16,6 +16,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import android.text.InputType
 import android.util.Log
@@ -31,6 +32,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -62,6 +64,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var web: WebView
     private lateinit var errorView: LinearLayout
     private lateinit var errorText: TextView
+    private lateinit var retryButton: Button
 
     private var fileCallback: ValueCallback<Array<Uri>>? = null
     private var pendingDownload: PendingDownload? = null
@@ -91,9 +94,13 @@ class MainActivity : ComponentActivity() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var timeoutRunnable: Runnable? = null
-    private var retryCount = 0
-    private var autoRetryPending = false
     private var lastFailedUrl: String? = null
+
+    // 重试策略（C+D）：不做定时重试，只在系统报告网络可用/切换时自动重试一次；
+    // 服务器已经应答（HTTP 4xx/5xx）时一律不自动重试，交回用户手动决定。
+    private var serverResponded = false
+    private var lastAutoRetryAt = 0L
+    private var pageLoading = false
 
     // 安全区（CSS px），供网站底部固定元素避让手势条/刘海
     private var safeAreaTop = 0
@@ -107,7 +114,7 @@ class MainActivity : ComponentActivity() {
 
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
         override fun onAvailable(network: Network) {
-            mainHandler.post { maybeAutoRetry() }
+            mainHandler.post { autoRetryOnNetworkChange() }
         }
     }
 
@@ -145,12 +152,8 @@ class MainActivity : ComponentActivity() {
         configureWebView()
         applyInsets(menuButton)
 
-        findViewById<Button>(R.id.retry_button).setOnClickListener {
-            retryCount = 0
-            cancelAutoRetry()
-            web.stopLoading()
-            web.loadUrl(currentUrl())
-        }
+        retryButton = findViewById(R.id.retry_button)
+        retryButton.setOnClickListener { retryNow() }
         menuButton.setOnClickListener { showMainMenu(it) }
 
         connectivityManager.registerDefaultNetworkCallback(networkCallback)
@@ -198,7 +201,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         cancelPageTimeout()
-        cancelAutoRetry()
         runCatching { connectivityManager.unregisterNetworkCallback(networkCallback) }
         web.destroy()
         super.onDestroy()
@@ -452,9 +454,10 @@ class MainActivity : ComponentActivity() {
     private fun onPageTimeout(url: String) {
         if (isDestroyed || isFinishing) return
         if (errorView.visibility == View.VISIBLE) return
+        pageLoading = false
         lastFailedUrl = url
         showError(getString(R.string.error_timeout), url)
-        if (retryCount < MAX_AUTO_RETRY) maybeAutoRetry()
+        retryButton.isEnabled = true
     }
 
     private fun showError(message: String, url: String? = null) {
@@ -465,35 +468,32 @@ class MainActivity : ComponentActivity() {
 
     private fun hideError() {
         errorView.visibility = View.GONE
-        retryCount = 0
         lastFailedUrl = null
     }
 
-    private fun maybeAutoRetry() {
-        if (isDestroyed || isFinishing) return
-        if (errorView.visibility != View.VISIBLE) return
-        if (retryCount >= MAX_AUTO_RETRY) return
-        if (autoRetryPending) return
-        autoRetryPending = true
-        errorText.text = getString(R.string.error_retrying, retryCount + 1, MAX_AUTO_RETRY)
-        mainHandler.postDelayed({
-            autoRetryPending = false
-            if (isDestroyed || isFinishing) return@postDelayed
-            if (errorView.visibility == View.VISIBLE && retryCount < MAX_AUTO_RETRY) {
-                doAutoRetry()
-            }
-        }, AUTO_RETRY_DELAY_MS)
-    }
-
-    private fun cancelAutoRetry() {
-        autoRetryPending = false
-        mainHandler.removeCallbacksAndMessages(null)
-    }
-
-    private fun doAutoRetry() {
-        retryCount++
+    /** 用户主动重试。加载期间按钮是禁用的，所以这里不会叠出第二次请求。 */
+    private fun retryNow() {
+        if (isDestroyed || isFinishing || pageLoading) return
+        pageLoading = true
+        retryButton.isEnabled = false
+        cancelPageTimeout()
         web.stopLoading()
         web.loadUrl(currentUrl())
+    }
+
+    /**
+     * 网络恢复/切换时才自动重试，最多一次。
+     * 服务器已经应答过（HTTP 错误）就不打扰——那只说明后端有问题，重试没用；
+     * 两次自动重试之间强制间隔冷却时长，避免网络抖动时反复砸服务器。
+     */
+    private fun autoRetryOnNetworkChange() {
+        if (isDestroyed || isFinishing) return
+        if (errorView.visibility != View.VISIBLE) return
+        if (serverResponded) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastAutoRetryAt < AUTO_RETRY_COOLDOWN_MS) return
+        lastAutoRetryAt = now
+        retryNow()
     }
 
     private fun describeError(error: WebResourceError): String {
@@ -718,12 +718,17 @@ class MainActivity : ComponentActivity() {
 
         override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
             if (BuildConfig.DEBUG) Log.d(TAG, "WV PGSTART $url")
+            pageLoading = true
+            serverResponded = false
+            retryButton.isEnabled = false
             startPageTimeout(url)
         }
 
         override fun onPageFinished(view: WebView, url: String) {
             if (BuildConfig.DEBUG) Log.d(TAG, "WV PGFIN   $url")
             cancelPageTimeout()
+            pageLoading = false
+            retryButton.isEnabled = true
             hideError()
             // 移除 WebView 默认的蓝色点击高亮，让体验更接近原生 APP
             view.evaluateJavascript(DISABLE_TAP_HIGHLIGHT, null)
@@ -741,9 +746,26 @@ class MainActivity : ComponentActivity() {
             }
             if (!request.isForMainFrame) return
             cancelPageTimeout()
+            pageLoading = false
+            serverResponded = false
+            retryButton.isEnabled = true
             lastFailedUrl = request.url.toString()
             showError(getString(R.string.error_template, describeError(error)))
-            if (retryCount < MAX_AUTO_RETRY) maybeAutoRetry()
+        }
+
+        override fun onReceivedHttpError(
+            view: WebView,
+            request: WebResourceRequest,
+            errorResponse: WebResourceResponse
+        ) {
+            if (!request.isForMainFrame) return
+            cancelPageTimeout()
+            pageLoading = false
+            retryButton.isEnabled = true
+            // 服务器已经应答，说明是后端问题：不自动重试，等用户决定
+            serverResponded = true
+            lastFailedUrl = request.url.toString()
+            showError(getString(R.string.error_http, errorResponse.statusCode))
         }
     }
 
@@ -834,8 +856,9 @@ class MainActivity : ComponentActivity() {
         const val MAX_HISTORY_SIZE = 5
 
         const val PAGE_TIMEOUT_MS = 15_000L
-        const val MAX_AUTO_RETRY = 3
-        const val AUTO_RETRY_DELAY_MS = 1_500L
+
+        /** 两次自动重试之间的最小间隔；网络抖动时防止反复请求服务器 */
+        const val AUTO_RETRY_COOLDOWN_MS = 30_000L
         const val UPDATE_CHECK_DELAY_MS = 3_000L
 
         // 注入 CSS 禁用 WebView 默认的蓝色点击高亮

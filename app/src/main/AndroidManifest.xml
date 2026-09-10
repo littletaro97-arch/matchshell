@@ -43,6 +43,17 @@
         <receiver
             android:name=".UpdateInstallReceiver"
             android:exported="false" />
+
+        <!-- 文件池位于 APP 私有目录，靠 FileProvider 把 content URI 交给 WebView 上传 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
     </application>
 
 </manifest>

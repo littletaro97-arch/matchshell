@@ -3,6 +3,7 @@ package com.hcgy2018.site
 import android.app.Activity
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.ClipData
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -11,6 +12,7 @@ import android.graphics.Paint
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.util.Size
 import android.view.LayoutInflater
 import android.view.View
@@ -24,48 +26,150 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/**
+ * 文件池。这是网页上传时的唯一文件来源：壳不再提供"从其他位置选文件"的入口，
+ * 所有要提交的文件都必须先经「资源预处理」进入本池。
+ */
 class FilePoolActivity : ComponentActivity() {
     private var selectMode = false
     private var allowMultiple = false
     private val entries = mutableListOf<FilePoolEntry>()
+    private val selected = linkedSetOf<FilePoolEntry>()
     private lateinit var poolAdapter: FilePoolAdapter
     private lateinit var emptyView: TextView
+    private lateinit var submitButton: Button
 
-    private val externalPicker = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            setResult(Activity.RESULT_OK, result.data)
-            finish()
+    /** 已存在的 PDF 不必先转换，从这里直接导入池子 */
+    private val pdfImporter =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri != null) importPdf(uri)
         }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_file_pool)
         selectMode = intent.getBooleanExtra(EXTRA_SELECT_MODE, false)
         allowMultiple = intent.getBooleanExtra(EXTRA_ALLOW_MULTIPLE, false)
-        entries += FilePoolStore.list(this)
 
         emptyView = findViewById(R.id.file_pool_empty)
+        submitButton = findViewById(R.id.file_pool_submit)
         poolAdapter = FilePoolAdapter()
         findViewById<GridView>(R.id.file_pool_list).apply {
             adapter = poolAdapter
-            setOnItemClickListener { _, _, position, _ ->
-                val entry = entries[position]
-                if (selectMode) returnSelection(entry.uri) else openFile(entry)
-            }
+            setOnItemClickListener { _, _, position, _ -> onItemClick(entries[position]) }
             setOnItemLongClickListener { _, _, position, _ -> confirmDelete(entries[position]); true }
         }
+        submitButton.apply {
+            visibility = if (selectMode && allowMultiple) View.VISIBLE else View.GONE
+            setOnClickListener { returnSelection(selected.toList()) }
+        }
+        findViewById<Button>(R.id.file_pool_import_pdf).setOnClickListener {
+            pdfImporter.launch(arrayOf("application/pdf"))
+        }
+        findViewById<Button>(R.id.file_pool_preprocess).setOnClickListener {
+            startActivity(Intent(this, PreprocessActivity::class.java))
+        }
+        applyWindowInsets()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 从预处理页返回后要能看到最新产物，因此每次回到前台都重扫目录
+        refreshPool()
+    }
+
+    private fun refreshPool() {
+        entries.clear()
+        entries += FilePoolStore.list(this)
+        selected.removeAll { entry -> entries.none { it.name == entry.name } }
+        poolAdapter.notifyDataSetChanged()
         updateEmptyState()
-        findViewById<Button>(R.id.file_pool_browse).apply {
-            visibility = if (selectMode) View.VISIBLE else View.GONE
-            setOnClickListener { browseOtherFiles() }
+        updateSubmitButton()
+    }
+
+    private fun onItemClick(entry: FilePoolEntry) {
+        when {
+            selectMode && allowMultiple -> {
+                if (!selected.remove(entry)) selected.add(entry)
+                poolAdapter.notifyDataSetChanged()
+                updateSubmitButton()
+            }
+            selectMode -> returnSelection(listOf(entry))
+            else -> openFile(entry)
         }
     }
+
+    private fun updateSubmitButton() {
+        if (submitButton.visibility != View.VISIBLE) return
+        submitButton.isEnabled = selected.isNotEmpty()
+        submitButton.text = if (selected.isEmpty()) {
+            getString(R.string.file_pool_submit_empty)
+        } else {
+            getString(R.string.file_pool_submit, selected.size)
+        }
+    }
+
+    private fun importPdf(uri: Uri) {
+        val rawName = queryDisplayName(uri) ?: "导入的文档"
+        val name = if (rawName.endsWith(".pdf", ignoreCase = true)) rawName else "$rawName.pdf"
+        lifecycleScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) { FilePoolStore.saveFromUri(this@FilePoolActivity, uri, name) }
+            }.onSuccess {
+                refreshPool()
+                Toast.makeText(
+                    this@FilePoolActivity,
+                    getString(R.string.file_pool_imported, it.name),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }.onFailure {
+                Toast.makeText(
+                    this@FilePoolActivity,
+                    getString(R.string.file_pool_import_failed, it.message ?: ""),
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+    }
+
+    private fun queryDisplayName(uri: Uri): String? = runCatching {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) cursor.getString(0) else null
+        }
+    }.getOrNull()
+
+    /** 顶部按系统栏与挖孔实际高度留白，避免标题被前摄/状态栏压住。 */
+    private fun applyWindowInsets() {
+        val root = findViewById<View>(R.id.file_pool_root)
+        val base = Padding(
+            root.paddingLeft, root.paddingTop, root.paddingRight, root.paddingBottom
+        )
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.updatePadding(
+                left = base.left + bars.left,
+                top = base.top + bars.top,
+                right = base.right + bars.right,
+                bottom = base.bottom + bars.bottom
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
+    }
+
+    private data class Padding(val left: Int, val top: Int, val right: Int, val bottom: Int)
 
     private fun confirmDelete(entry: FilePoolEntry) {
         AlertDialog.Builder(this)
@@ -74,17 +178,26 @@ class FilePoolActivity : ComponentActivity() {
             .setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(R.string.delete) { _, _ ->
                 if (FilePoolStore.delete(this, entry)) {
-                    entries.remove(entry)
-                    poolAdapter.notifyDataSetChanged()
-                    updateEmptyState()
+                    refreshPool()
                 } else Toast.makeText(this, R.string.file_delete_failed, Toast.LENGTH_LONG).show()
             }.show()
     }
 
     private fun updateEmptyState() { emptyView.visibility = if (entries.isEmpty()) View.VISIBLE else View.GONE }
 
-    private fun returnSelection(uri: Uri) {
-        setResult(Activity.RESULT_OK, Intent().apply { data = uri; addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION) })
+    private fun returnSelection(picked: List<FilePoolEntry>) {
+        if (picked.isEmpty()) return
+        val uris = picked.map { it.uri }
+        val intent = Intent().apply {
+            data = uris.first()
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (uris.size > 1) {
+                clipData = ClipData.newUri(contentResolver, "matchshell-pool", uris.first()).apply {
+                    uris.drop(1).forEach { addItem(ClipData.Item(it)) }
+                }
+            }
+        }
+        setResult(Activity.RESULT_OK, intent)
         finish()
     }
 
@@ -93,17 +206,6 @@ class FilePoolActivity : ComponentActivity() {
             setDataAndType(entry.uri, entry.mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }) }
-    }
-
-    private fun browseOtherFiles() {
-        val accepted = intent.getStringArrayExtra(EXTRA_ACCEPT_TYPES)?.filter { it.isNotBlank() }.orEmpty()
-        externalPicker.launch(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = if (accepted.size == 1) accepted.first() else "*/*"
-            if (accepted.size > 1) putExtra(Intent.EXTRA_MIME_TYPES, accepted.toTypedArray())
-            putExtra(Intent.EXTRA_ALLOW_MULTIPLE, allowMultiple)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        })
     }
 
     private inner class FilePoolAdapter : BaseAdapter() {
@@ -115,6 +217,10 @@ class FilePoolActivity : ComponentActivity() {
             val entry = getItem(position)
             val image = view.findViewById<ImageView>(R.id.file_thumbnail)
             view.findViewById<TextView>(R.id.file_name).text = entry.name
+            view.setBackgroundResource(
+                if (selected.contains(entry)) R.drawable.file_pool_item_selected_background
+                else R.drawable.file_pool_item_background
+            )
             image.tag = entry.uri
             image.setImageBitmap(genericThumbnail(entry.name))
             lifecycleScope.launch {

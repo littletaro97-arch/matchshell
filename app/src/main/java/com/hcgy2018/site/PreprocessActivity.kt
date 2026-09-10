@@ -17,6 +17,10 @@ import android.widget.TextView
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import androidx.lifecycle.lifecycleScope
 import androidx.exifinterface.media.ExifInterface
 import androidx.media3.common.Effect
@@ -63,6 +67,7 @@ class PreprocessActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         setContentView(R.layout.activity_preprocess)
 
         statusText = findViewById(R.id.status_text)
@@ -83,6 +88,29 @@ class PreprocessActivity : ComponentActivity() {
             clearPendingOutput()
             resetUi(getString(R.string.processing_cancelled))
         }
+        applyWindowInsets()
+    }
+
+    /** 顶部按系统栏与挖孔实际高度留白，避免标题被前摄/状态栏压住。 */
+    private fun applyWindowInsets() {
+        val root = findViewById<View>(R.id.preprocess_root)
+        val baseLeft = root.paddingLeft
+        val baseTop = root.paddingTop
+        val baseRight = root.paddingRight
+        val baseBottom = root.paddingBottom
+        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
+            val bars = insets.getInsets(
+                WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+            )
+            view.updatePadding(
+                left = baseLeft + bars.left,
+                top = baseTop + bars.top,
+                right = baseRight + bars.right,
+                bottom = baseBottom + bars.bottom
+            )
+            insets
+        }
+        ViewCompat.requestApplyInsets(root)
     }
 
     override fun onDestroy() {
@@ -193,13 +221,19 @@ class PreprocessActivity : ComponentActivity() {
     }
 
     private fun convertOfficeDocument(uri: Uri) {
+        val name = suggestedOriginalName(uri)
+        val suffix = name.substringAfterLast('.', "").lowercase()
+
+        // 选中已经是 PDF 的文件：没有可转换的内容，直接导入文件池
+        if (suffix == "pdf") {
+            importPdfToPool(uri, name)
+            return
+        }
         if (!DocumentPdfConverter.isAvailable) {
             AlertDialog.Builder(this).setTitle(R.string.office_convert)
                 .setMessage(R.string.office_engine_missing).setPositiveButton(android.R.string.ok, null).show()
             return
         }
-        val name = suggestedOriginalName(uri)
-        val suffix = name.substringAfterLast('.', "").lowercase()
         if (suffix !in OFFICE_SUFFIXES) {
             resetUi(getString(R.string.office_unsupported, suffix))
             return
@@ -217,6 +251,21 @@ class PreprocessActivity : ComponentActivity() {
                 }
             }.onSuccess { saveToFilePool(it, name.substringBeforeLast('.', name) + ".pdf", "application/pdf") }
                 .onFailure { showFailure(it.cause ?: it) }
+        }
+    }
+
+    /** 已有 PDF 直接进池子，不经过转换引擎。 */
+    private fun importPdfToPool(uri: Uri, name: String) {
+        setBusy(getString(R.string.processing_importing_pdf), indeterminate = true)
+        lifecycleScope.launch {
+            runCatching {
+                withContext(Dispatchers.IO) {
+                    pendingOriginalBytes = querySize(uri)
+                    FilePoolStore.saveFromUri(this@PreprocessActivity, uri, name)
+                }
+            }.onSuccess {
+                resetUi(getString(R.string.processing_pdf_imported, it.name))
+            }.onFailure { showFailure(it.cause ?: it) }
         }
     }
 

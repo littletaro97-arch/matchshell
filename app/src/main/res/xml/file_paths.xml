@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 文件池路径映射：与 FilePoolStore.poolDir() 保持一致，改一处必须同步改另一处 -->
+<paths>
+    <!-- getExternalFilesDir(DIRECTORY_DOWNLOADS) -> Android/data/<包名>/files/Download/ -->
+    <external-files-path
+        name="pool_external"
+        path="Download/火柴公益文件池/" />
+    <!-- 外置私有目录不可用时的回退位置：/data/data/<包名>/files/ -->
+    <files-path
+        name="pool_internal"
+        path="火柴公益文件池/" />
+</paths>
