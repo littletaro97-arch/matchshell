@@ -191,8 +191,11 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - 首个正式稳定版使用 `com.hcgy2018.site`；不得重新添加 `.pdf` 后缀。
 - 正式版本从 `1.0.0` / versionCode `100` 起步，后续 versionCode 必须严格递增并保持同一发布证书。
 - versionCode 映射：major×100 + minor×10 + patch（`1.0.0`→100、`1.1.3`→113）。
-  已发布 `1.0.0`/100；当前开发版 `1.1.3`/113（在 1.1.2 的文件池私有化 + PDF 导入入口 + 重连 C+D
-  + 后台下载 + 启动图标深浅色之上，修掉手势条遮挡贴底固定元素的问题），未发版。
-  ⚠️ 发版时 versionCode 必须**严格大于**已存在的所有构建产物：更新判定要求清单 versionCode
-  `> BuildConfig.VERSION_CODE`，与已装 debug 包同号会导致该设备收不到更新提示。
+  已发布：`1.0.0`/100、`1.1.1`/111、`1.1.2`/112、`1.1.3`/113。
+- ⚠️ **发版时版本号必须严格递增，不要复用已有 tag。** 两个独立原因：
+  1. 更新判定要求清单 versionCode `> BuildConfig.VERSION_CODE`（见 `AppUpdateManager.shouldOffer`），
+     与已装版本同号 → 那台设备收不到任何更新提示。
+  2. `release.yml` 遇到已存在的 Release 会**复用旧资产**（`gh release download` 后原样 `cp`，
+     再据此算 sha256）。复用 tag 会让清单指向**没有本次改动的旧 APK**，且不会报错——
+     属于静默失败，必须靠递增版本号规避。
 - 稳定发布通过 `.github/workflows/release.yml` 手动触发；真机更新链未验收前不得创建稳定 Release。

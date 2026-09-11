@@ -5,8 +5,10 @@
 
 - 正式包名 `com.hcgy2018.site`
 - minSdk 26（Android 8.0）／targetSdk 35
-- 已发布稳定版：`1.0.0` / versionCode `100`（GitHub Release `v1.0.0`）
-- 开发中版本：`1.1.3` / versionCode `113`（未发版，见 `dist/matchshell-v1.1.3-pdf-arm64-debug.apk`）
+- 已发布稳定版：`1.1.3` / versionCode `113`（GitHub Release `v1.1.3`）
+- 已发布历史：`1.0.0`/100、`1.1.1`/111、`1.1.2`/112
+- 本地构建产物：`dist/matchshell-v1.1.3-pdf-arm64-debug.apk`
+  （debug 签名，与发布包证书不同，**不能覆盖安装**，需先卸载）
 - 版本号映射：major×100 + minor×10 + patch；只维护 PDF 转换变体
 - UI 仍保持无 appcompat；资源预处理使用 AndroidX ExifInterface 与 Media3 Transformer
 - 默认打开 `https://hcgy2018.site/`（在 `res/values/strings.xml` 里改）
