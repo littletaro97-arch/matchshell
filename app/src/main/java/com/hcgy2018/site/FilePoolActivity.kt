@@ -61,9 +61,10 @@ class FilePoolActivity : ComponentActivity() {
     private lateinit var selectedCountLabel: TextView
     private lateinit var cancelLabel: TextView
     private lateinit var pendingLabel: TextView
-    private lateinit var toolbar: LinearLayout
     private lateinit var emptyView: TextView
     private lateinit var noteLabel: TextView
+    private lateinit var importPdfButton: Button
+    private lateinit var preprocessButton: Button
     private lateinit var renameButton: Button
     private lateinit var deleteButton: Button
     private lateinit var submitButton: Button
@@ -111,10 +112,8 @@ class FilePoolActivity : ComponentActivity() {
         deleteButton.setOnClickListener { confirmDeleteSelected() }
         submitButton.setOnClickListener { submitSelection() }
         cancelLabel.setOnClickListener { exitSelecting() }
-        findViewById<Button>(R.id.file_pool_import_pdf).setOnClickListener {
-            pdfImporter.launch(arrayOf("application/pdf"))
-        }
-        findViewById<Button>(R.id.file_pool_preprocess).setOnClickListener {
+        importPdfButton.setOnClickListener { pdfImporter.launch(arrayOf("application/pdf")) }
+        preprocessButton.setOnClickListener {
             startActivity(Intent(this, PreprocessActivity::class.java))
         }
 
@@ -131,9 +130,10 @@ class FilePoolActivity : ComponentActivity() {
         selectedCountLabel = findViewById(R.id.file_pool_selected_count)
         cancelLabel = findViewById(R.id.file_pool_cancel)
         pendingLabel = findViewById(R.id.file_pool_pending)
-        toolbar = findViewById(R.id.file_pool_toolbar)
         emptyView = findViewById(R.id.file_pool_empty)
         noteLabel = findViewById(R.id.file_pool_note)
+        importPdfButton = findViewById(R.id.file_pool_import_pdf)
+        preprocessButton = findViewById(R.id.file_pool_preprocess)
         renameButton = findViewById(R.id.file_pool_rename)
         deleteButton = findViewById(R.id.file_pool_delete)
         submitButton = findViewById(R.id.file_pool_submit)
@@ -174,10 +174,9 @@ class FilePoolActivity : ComponentActivity() {
         pendingLabel.text = getString(R.string.file_pool_pending, count)
         pendingLabel.visibility = if (count == 0) View.GONE else View.VISIBLE
 
-        // 多选态：标题与「中转站」标签换成「已选 N 项」，工具栏让位给列表
+        // 多选态：标题与「中转站」标签换成「已选 N 项」
         titleLabel.visibility = if (selecting) View.GONE else View.VISIBLE
         badgeLabel.visibility = if (selecting) View.GONE else View.VISIBLE
-        toolbar.visibility = if (selecting) View.GONE else View.VISIBLE
         cancelLabel.visibility = if (selecting) View.VISIBLE else View.GONE
         if (selecting) {
             selectedCountLabel.text = getString(R.string.file_pool_selected_count, selected.size)
@@ -186,31 +185,22 @@ class FilePoolActivity : ComponentActivity() {
             selectedCountLabel.visibility = View.GONE
         }
 
-        val hasSelection = selected.isNotEmpty()
-        setBarButtonEnabled(renameButton, hasSelection)
-        setBarButtonEnabled(deleteButton, hasSelection)
+        // 底部那一块按状态换内容，高度不动：
+        // 常态是「导入 PDF / 去资源预处理」，多选态才换成「重命名 / 删除」。
+        // 能进入多选态就必然已有选中项（见 toggleSelection / onItemLongClick），
+        // 所以这几个按钮不需要禁用态 —— 早先给它们压 alpha 反而让按钮
+        // 与条底色同色而"消失"，成了看不见的按钮。
+        importPdfButton.visibility = if (selecting) View.GONE else View.VISIBLE
+        preprocessButton.visibility = if (selecting) View.GONE else View.VISIBLE
+        renameButton.visibility = if (selecting) View.VISIBLE else View.GONE
+        deleteButton.visibility = if (selecting) View.VISIBLE else View.GONE
 
-        if (pickerMode && allowMultiple) {
+        if (selecting && pickerMode && allowMultiple) {
             submitButton.visibility = View.VISIBLE
-            submitButton.text = if (hasSelection) {
-                getString(R.string.file_pool_submit, selected.size)
-            } else {
-                getString(R.string.file_pool_submit_empty)
-            }
-            setBarButtonEnabled(submitButton, hasSelection)
+            submitButton.text = getString(R.string.file_pool_submit, selected.size)
         } else {
             submitButton.visibility = View.GONE
         }
-    }
-
-    /**
-     * 操作条的禁用态。
-     * 按钮背景是 state-list，没有 disabled 分支，所以额外压一层透明度，
-     * 否则"不可点"和"可点"看起来一样。
-     */
-    private fun setBarButtonEnabled(button: Button, enabled: Boolean) {
-        button.isEnabled = enabled
-        button.alpha = if (enabled) 1f else 0.45f
     }
 
     private fun exitSelecting() {

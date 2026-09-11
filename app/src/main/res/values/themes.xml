@@ -86,15 +86,20 @@
     <!--
       文件池贴底操作条：管理态 / 选择器态 / 重命名态共用同一高度，
       切语境时几何不变（用户明确要求三种情况的占用高度相同）。
-      68 = 44 按钮 + 上下各 12。
+
+      ⚠️ 条本身**不加背景**：只让里面的圆角按钮自己成形。
+      早先给它铺了一层 card_background，结果是一条通栏的直角色块，
+      和全站圆角语言打架（用户报过"外部还有直角框"）。
+
+      左右内边距配 4 + 14：每个按钮自带 10dp marginStart，
+      这样第一个按钮距边 14dp、按钮间距 10dp，且不管换哪一组按钮都成立。
     -->
     <style name="FilePoolActionBar">
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">68dp</item>
-        <item name="android:background">@color/card_background</item>
         <item name="android:orientation">horizontal</item>
         <item name="android:gravity">center_vertical</item>
-        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingStart">4dp</item>
         <item name="android:paddingEnd">14dp</item>
     </style>
 
@@ -102,6 +107,7 @@
         <item name="android:layout_width">0dp</item>
         <item name="android:layout_height">44dp</item>
         <item name="android:layout_weight">1</item>
+        <item name="android:layout_marginStart">10dp</item>
         <item name="android:background">@drawable/button_secondary_background</item>
         <item name="android:textColor">@color/text_primary</item>
         <item name="android:textSize">13sp</item>
