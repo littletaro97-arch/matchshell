@@ -108,6 +108,9 @@ class MainActivity : ComponentActivity() {
     private var safeAreaLeft = 0
     private var safeAreaRight = 0
 
+    /** 前台状态。上传完成的通知可能在后台到达，不弹窗，等回到前台再补。 */
+    private var resumed = false
+
     private val connectivityManager by lazy {
         getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     }
@@ -123,6 +126,7 @@ class MainActivity : ComponentActivity() {
             val callback = fileCallback ?: return@registerForActivityResult
             fileCallback = null
             val picked = if (result.resultCode == Activity.RESULT_OK) collectUris(result.data) else null
+            if (result.resultCode == Activity.RESULT_OK) rememberSubmittedFiles(result.data)
             callback.onReceiveValue(picked)
         }
 
@@ -180,6 +184,99 @@ class MainActivity : ComponentActivity() {
         // 上次的更新包可能已在后台下载完，先把这笔账接上再谈检查
         updateManager.resumePendingDownload()
         mainHandler.postDelayed({ updateManager.checkAutomatically() }, UPDATE_CHECK_DELAY_MS)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        resumed = true
+        // 上传完成的那一刻如果不在前台，弹窗会被丢掉，这里补一次。
+        // 只认"真的收到过完成信号"（KEY_UPLOAD_COMPLETED），否则提交过但没传完也会误弹。
+        if (prefs.getBoolean(KEY_UPLOAD_COMPLETED, false)) {
+            mainHandler.removeCallbacks(uploadDoneRunnable)
+            mainHandler.postDelayed(uploadDoneRunnable, UPLOAD_DONE_DEBOUNCE_MS)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        resumed = false
+    }
+
+    // ---------------- 上传完成后清理中转站 ----------------
+
+    /**
+     * 记下本次提交给网页的文件（键 = 文件名|大小|修改时间）。
+     * 上传完成后要据此询问是否从文件池清掉，这个信息要跨进程存活，所以进 SharedPreferences。
+     */
+    private fun rememberSubmittedFiles(data: Intent?) {
+        val keys = data?.getStringArrayListExtra(FilePoolActivity.EXTRA_SUBMITTED_KEYS).orEmpty()
+        prefs.edit()
+            .putString(KEY_PENDING_CLEANUP, org.json.JSONArray(keys).toString())
+            .putBoolean(KEY_UPLOAD_COMPLETED, false)
+            .apply()
+    }
+
+    private fun readPendingCleanup(): List<String> = runCatching {
+        val array = org.json.JSONArray(prefs.getString(KEY_PENDING_CLEANUP, "[]") ?: "[]")
+        List(array.length()) { array.getString(it) }
+    }.getOrDefault(emptyList())
+
+    private fun clearPendingCleanup() {
+        mainHandler.removeCallbacks(uploadDoneRunnable)
+        prefs.edit()
+            .remove(KEY_PENDING_CLEANUP)
+            .putBoolean(KEY_UPLOAD_COMPLETED, false)
+            .apply()
+    }
+
+    /**
+     * 网站的分片上传跑到了最后一步 (`POST …/complete/`)。
+     * 由注入的 fetch 钩子转达 —— 见 [SHELL_INJECTOR]。去抖是因为多文件并发传，
+     * 每个文件各打一次 complete，等它们都收尾再问一次。
+     */
+    private fun onUploadFinished() {
+        prefs.edit().putBoolean(KEY_UPLOAD_COMPLETED, true).apply()
+        mainHandler.removeCallbacks(uploadDoneRunnable)
+        mainHandler.postDelayed(uploadDoneRunnable, UPLOAD_DONE_DEBOUNCE_MS)
+    }
+
+    private val uploadDoneRunnable = Runnable { promptCleanupAfterUpload() }
+
+    private fun promptCleanupAfterUpload() {
+        if (isFinishing || !resumed) return
+        if (!prefs.getBoolean(KEY_UPLOAD_COMPLETED, false)) return
+
+        val keys = readPendingCleanup()
+        if (keys.isEmpty()) {
+            clearPendingCleanup()
+            return
+        }
+        // 只列仍在池里的；用户自己已经删掉的不重复出现
+        val still = FilePoolStore.list(this).filter { FilePoolStore.cacheKey(it) in keys }
+        if (still.isEmpty()) {
+            clearPendingCleanup()
+            return
+        }
+
+        dialogBuilder(this)
+            .setTitle(R.string.upload_done_title)
+            .setMessage(
+                getString(
+                    R.string.upload_done_message,
+                    still.size,
+                    still.joinToString("\n") { "• ${it.name}" }
+                )
+            )
+            .setNegativeButton(R.string.upload_done_keep) { _, _ -> clearPendingCleanup() }
+            .setPositiveButton(R.string.upload_done_delete) { _, _ ->
+                still.forEach {
+                    ThumbnailStore.invalidate(FilePoolStore.cacheKey(it))
+                    FilePoolStore.delete(this, it)
+                }
+                clearPendingCleanup()
+            }
+            .show()
+            .roundCorners()
     }
 
     // --- DIAG (仅DEBUG): 完整事件流追踪 ---
@@ -322,31 +419,25 @@ class MainActivity : ComponentActivity() {
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
             )
             updateSafeArea(stable.top, stable.bottom, stable.left, stable.right)
-            applyBottomClearance(stable.bottom)
             insets
         }
         ViewCompat.requestApplyInsets(root)
     }
 
     /**
-     * 把底部安全区从 WebView 视口里扣掉，让网站的贴底固定元素自然抬起。
+     * 网站贴底固定元素的避让，走 CSS 注入而不是给 WebView 留白。
      *
-     * 网站侧本来用 `env(safe-area-inset-bottom)` 避让手势条，但 `base.html` 的 viewport
-     * 没有声明 `viewport-fit=cover`，按 CSS 规范此时 `env()` 恒为 0
-     * —— 也就是网站那些避让代码目前是空转的（预览页翻页底栏只剩 7px 底距，被手势条压住）。
+     * 历史：1.1.3 曾给 WebView 设 `layout_marginBottom = 底部安全区` 来抬高贴底元素，
+     * 但那个值取自 `getInsetsIgnoringVisibility()`——**导航条已隐藏时它照样返回导航条高度**，
+     * 于是底部被永久占掉约 48dp，边到边全屏失效（1.1.4 已回滚，用户明确要求始终保持全屏）。
      *
-     * 壳不改网站，改为在视口层面兜底：缩小 WebView 自身高度，Chromium 的布局视口随之变矮，
-     * 而 `position: fixed` 正是以视口为包含块，所以贴底固定元素会整体上移。
-     * 用 layout_marginBottom 而不是 padding：边距在 View 层就直接把 WebView 量小，
-     * 不依赖 WebView 对 padding 的内部处理，行为确定。
-     * 让出的那条露出根容器底色（@color/page_background，与网站 --paper 几乎同色）。
-     *
-     * 只在数值变化时写入：insets 回调触发频繁，重复设置会引起无谓重排。
+     * 现在改为注样式：只给那几个已知的贴底元素补 padding，不动视口，全屏得以保留。
+     * 代价是写死了网站的类名——网站改名后这一段会静默失效（后果仅"底栏又沉回手势条下面"），
+     * 清单同步记录在 UPSTREAM_CONTRACT.md。
      */
-    private fun applyBottomClearance(bottomPx: Int) {
-        val params = web.layoutParams as? FrameLayout.LayoutParams ?: return
-        if (params.bottomMargin == bottomPx) return
-        web.updateLayoutParams<FrameLayout.LayoutParams> { bottomMargin = bottomPx }
+    private fun injectShellCss() {
+        if (!::web.isInitialized) return
+        web.evaluateJavascript(SHELL_INJECTOR, null)
     }
 
     /**
@@ -587,8 +678,7 @@ class MainActivity : ComponentActivity() {
                 if (item == getString(R.string.url_history_manual)) {
                     showUrlInputDialog("")
                 } else {
-                    saveUrl(item)
-                    web.loadUrl(item)
+                    confirmAndSwitchUrl(item)
                 }
             },
             onDelete = { item ->
@@ -597,15 +687,33 @@ class MainActivity : ComponentActivity() {
         )
         listView.adapter = adapter
 
-        dialog = AlertDialog.Builder(this)
+        dialog = dialogBuilder(this)
             .setTitle(R.string.prompt_url_title)
             .setView(listView)
             .setNegativeButton(android.R.string.cancel, null)
             .show()
+            .roundCorners()
+    }
+
+    /**
+     * 切换地址前的二次确认。
+     * 地址填错会把用户直接丢到错误页面，历史里还会留下一条脏记录，所以统一在这里拦一次。
+     */
+    private fun confirmAndSwitchUrl(url: String) {
+        dialogBuilder(this)
+            .setTitle(R.string.url_confirm_title)
+            .setMessage(getString(R.string.url_confirm_message, url))
+            .setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(R.string.url_confirm_action) { _, _ ->
+                saveUrl(url)
+                web.loadUrl(url)
+            }
+            .show()
+            .roundCorners()
     }
 
     private fun showDeleteHistoryDialog(url: String, parentDialog: AlertDialog) {
-        AlertDialog.Builder(this)
+        dialogBuilder(this)
             .setTitle(R.string.url_history_delete_title)
             .setMessage(getString(R.string.url_history_delete_message, url))
             .setNegativeButton(android.R.string.cancel, null)
@@ -619,6 +727,7 @@ class MainActivity : ComponentActivity() {
                 }
             }
             .show()
+            .roundCorners()
     }
 
     private fun showUrlInputDialog(defaultUrl: String) {
@@ -632,7 +741,7 @@ class MainActivity : ComponentActivity() {
             }
             inputType = InputType.TYPE_TEXT_VARIATION_URI
         }
-        AlertDialog.Builder(this)
+        dialogBuilder(this)
             .setTitle(R.string.prompt_url_title)
             .setMessage(R.string.prompt_url_message)
             .setView(input)
@@ -643,10 +752,10 @@ class MainActivity : ComponentActivity() {
                     Toast.makeText(this, R.string.url_invalid, Toast.LENGTH_SHORT).show()
                     return@setPositiveButton
                 }
-                saveUrl(url)
-                web.loadUrl(url)
+                confirmAndSwitchUrl(url)
             }
             .show()
+            .roundCorners()
     }
 
     private fun saveUrl(url: String) {
@@ -758,10 +867,9 @@ class MainActivity : ComponentActivity() {
             pageLoading = false
             retryButton.isEnabled = true
             hideError()
-            // 移除 WebView 默认的蓝色点击高亮，让体验更接近原生 APP
-            view.evaluateJavascript(DISABLE_TAP_HIGHLIGHT, null)
-            // 每个新文档都要重新注入：上页设置的行内样式会随导航丢掉
+            // 每个新文档都要重新注入：上页注入的样式与钩子会随导航一起丢掉
             applySafeAreaCssVars()
+            injectShellCss()
         }
 
         override fun onReceivedError(
@@ -869,6 +977,18 @@ class MainActivity : ComponentActivity() {
         fun reload() {
             activity.runOnUiThread { activity.web.reload() }
         }
+
+        /**
+         * 网站上传完成的通知。
+         *
+         * 现在由壳注入的 fetch 钩子代网站调用（见 MainActivity.SHELL_INJECTOR）——
+         * 网站侧还没有实现任何壳契约，所以先用壳侧钩子顶着。
+         * 网站哪天愿意主动调这个方法，行为完全一致，壳不需要改。
+         */
+        @JavascriptInterface
+        fun onUploadComplete() {
+            activity.runOnUiThread { activity.onUploadFinished() }
+        }
     }
 
     private companion object {
@@ -883,18 +1003,72 @@ class MainActivity : ComponentActivity() {
         const val KEY_URL_HISTORY = "url_history"
         const val MAX_HISTORY_SIZE = 5
 
+        /** 本次提交给网页的文件键（文件名|大小|修改时间），上传完成后据此询问是否清理 */
+        const val KEY_PENDING_CLEANUP = "pending_cleanup"
+        /** 是否真的收到过"上传完成"信号。用来把"提交过但没传完"排除在询问之外 */
+        const val KEY_UPLOAD_COMPLETED = "upload_completed"
+
         const val PAGE_TIMEOUT_MS = 15_000L
 
         /** 两次自动重试之间的最小间隔；网络抖动时防止反复请求服务器 */
         const val AUTO_RETRY_COOLDOWN_MS = 30_000L
         const val UPDATE_CHECK_DELAY_MS = 3_000L
 
-        // 注入 CSS 禁用 WebView 默认的蓝色点击高亮
-        private const val DISABLE_TAP_HIGHLIGHT = """
+        /**
+         * 上传完成后的询问去抖窗口。
+         * 多文件是并发传的，每个文件各打一次 …/complete/，等它们都收尾再问一次，
+         * 否则会连弹好几次。
+         */
+        const val UPLOAD_DONE_DEBOUNCE_MS = 1_500L
+
+        /**
+         * 页面加载完成后注入的一次性脚本，三件事：
+         *  1. 去掉 WebView 默认的蓝色点击高亮；
+         *  2. 给网站的贴底固定元素补安全区内边距（替代 1.1.3 那个会破坏全屏的视口留白）；
+         *  3. 钩住 window.fetch，用来判断网站的上传是否完成。
+         *
+         * 全部用 id / 标志位做幂等，重复注入不会叠加。
+         */
+        private val SHELL_INJECTOR = """
             (function(){
-                var s=document.createElement('style');
-                s.textContent='*{-webkit-tap-highlight-color:transparent!important;}';
-                document.head.appendChild(s);
+                var d=document;
+                if(!d.head){return;}
+
+                if(!d.getElementById('ms-tap-highlight')){
+                    var a=d.createElement('style');
+                    a.id='ms-tap-highlight';
+                    a.textContent='*{-webkit-tap-highlight-color:transparent!important;}';
+                    d.head.appendChild(a);
+                }
+
+                if(!d.getElementById('ms-safe-bottom-css')){
+                    var b=d.createElement('style');
+                    b.id='ms-safe-bottom-css';
+                    b.textContent=
+                        '.guest-document-preview__controls{padding-bottom:calc(7px + max(var(--preview-safe-bottom,0px),var(--ms-safe-bottom,0px)))!important;}'+
+                        '.browser-preview__pager{padding-bottom:calc(8px + max(0px,var(--ms-safe-bottom,0px)))!important;}'+
+                        '.notification-toast-region{bottom:calc(20px + max(var(--notification-safe-bottom,0px),var(--ms-safe-bottom,0px)))!important;}';
+                    d.head.appendChild(b);
+                }
+
+                if(!window.__msFetchHooked && typeof window.fetch==='function' && typeof window.MatchShell!=='undefined'){
+                    window.__msFetchHooked=true;
+                    var of=window.fetch;
+                    window.fetch=function(input,init){
+                        var url='';
+                        try{url=(typeof input==='string')?input:((input&&input.url)||'');}catch(e){}
+                        var p=of.apply(this,arguments);
+                        try{
+                            p.then(function(res){
+                                var path=String(url).split('?')[0].split('#')[0];
+                                if(path.slice(-10)==='/complete/' && res && res.ok){
+                                    try{window.MatchShell.onUploadComplete();}catch(e){}
+                                }
+                            });
+                        }catch(e){}
+                        return p;
+                    };
+                }
             })();
         """
     }

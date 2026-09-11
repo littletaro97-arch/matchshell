@@ -38,33 +38,57 @@ MatchShell 是火柴公益网站的独立 Android WebView 承载端，不是网�
 2. **安全区变量**：壳会在每个页面的 `<html>` 上写入 `--ms-safe-top` / `--ms-safe-bottom` /
    `--ms-safe-left` / `--ms-safe-right`（CSS px，随旋转和挖孔自动更新）。
 
-### ⚠️ 底部避让已由壳在视口层兜底，网站不要再对底部加内边距
+### ⚠️ 底部避让由壳注入 CSS 兜底，网站不要再对底部加内边距
 
-壳会给 WebView 留出等于底部安全区的高度，网站视口底边本身就落在手势条之上，
-贴底固定元素（如预览页翻页底栏）天然不会被压住。
+壳会在每个页面加载后注入一段样式，把下面这几个贴底固定元素抬到手势条之上：
 
-这样做的原因是网站侧一个既有问题：`src/templates/base.html` 的 viewport
-未声明 `viewport-fit=cover`，按 CSS 规范此时 `env(safe-area-inset-*)` **恒为 0**，
-所以网站 `resource-preview-layout.css` / `resource-browser-preview.css` /
-`notifications.css` 里已有的安全区写法目前实际是空转的。
+| 网站选择器 | 壳补的偏移 |
+|---|---|
+| `.guest-document-preview__controls` | `padding-bottom: calc(7px + max(var(--preview-safe-bottom,0px), var(--ms-safe-bottom,0px)))` |
+| `.browser-preview__pager` | `padding-bottom: calc(8px + var(--ms-safe-bottom,0px))` |
+| `.notification-toast-region` | `bottom: calc(20px + max(var(--notification-safe-bottom,0px), var(--ms-safe-bottom,0px)))` |
+
+用 `max()` 的用意：网站自己设了更大的安全区时以网站为准，网站没设时才用壳的值。
+
+**为什么不是给 WebView 留白**：1.1.3 曾这么做，但底部安全区取值自「忽略系统栏可见性」的 insets ——
+导航条明明已隐藏，它照样返回导航条高度，于是底部被永久占掉约 48dp，**边到边全屏失效**。
+1.1.4 已回滚，改为只在 CSS 层抬元素，视口不动，全屏得以保留。
+
+另外，网站侧 `src/templates/base.html` 的 viewport 未声明 `viewport-fit=cover`，
+按 CSS 规范此时 `env(safe-area-inset-*)` **恒为 0**，网站
+`resource-preview-layout.css` / `resource-browser-preview.css` / `notifications.css`
+里已有的安全区写法目前实际是空转的 —— 壳的注入正是补这个缺口。
 
 因此：
 
-- 网站**不要**再补 `viewport-fit=cover`，也**不要**对底部再加 `padding-bottom`
-  （无论用 `env(safe-area-inset-bottom)` 还是 `--ms-safe-bottom`）——
-  会与壳的兜底叠加成双重内边距。
+- 网站**不要**改这几个选择器的类名，除非同时把新名字给到壳。
+  壳只认硬编码的选择器，**改类名后这条补偿会静默失效**（不崩，只是底栏又沉回手势条下面）。
+- 网站**不要**再补 `viewport-fit=cover`：`env()` 一旦生效会与壳的注入叠加成双重内边距。
+- 网站**新增**贴底固定元素时，要么直接用 `--ms-safe-bottom`，要么通知壳加一条注入规则。
 - 网站**可以**继续用 `--ms-safe-top` / `-left` / `-right` 处理刘海与侧边挖孔：
   壳在顶部与左右**不**留白，全屏内容延伸至刘海区域是有意的观感选择。
 - 若某页面仍出现"底部内容被手势条盖住"，先记录设备型号与复现路径，
-  在**壳侧**调整兜底策略，不要在网站侧临时加内边距。
+  在**壳侧**调整注入清单，不要在网站侧临时加内边距。
 
-以上变量与 UA token 由壳单向提供给网站；网站不得假设壳会读取任何页面 DOM 或 Cookie 来反向判断。
+### 上传完成的信号（2026-09-11 起）
+
+壳在文件池里提交文件后会记住这批文件；等网站把上传跑完，壳会询问用户是否从文件池删除。
+
+**现在不需要网站做任何事**：壳注入脚本钩住 `window.fetch`，监听
+`POST …/complete/` 成功即视为上传完成（这是网站分片上传的收尾请求，见 `src/static/upload.js`）。
+首次命中后去抖约 1.5 秒再询问（多文件是并发传的）。
+
+⚠️ 这条依赖网站的 `…/complete/` 路径约定。网站若改路径，钩子会**静默失效** ——
+后果只是"不再弹出清理询问"，上传本身不受影响。
+
+**更干净的做法**：网站主动调 `window.MatchShell.onUploadComplete()`（JS 桥接已存在）。
+壳侧已经把这个入口准备好了，网站接上之后行为完全一致，钩子可以保留作兜底。
 
 ### 两侧契约副本的同步状态
 
 上游权威副本 `E:\火柴公益官网建设-全新架构\docs\contracts\matchshell-carrier-contract-v1.md`
-仍是 2026-09-05 的 v1，**尚未包含本节的壳标识与安全区约定**（网站侧因此没有实现 APP 模式渲染）。
-按本节开头第 1 条对接前，先把本节同步到上游副本。
+仍是 2026-09-05 的 v1，**尚未包含本节的壳标识、安全区与上传完成约定**
+（网站侧因此也没有实现 APP 模式渲染）。按本节对接前，先把本节同步到上游副本。
 
 ## 上游变更处理
 
