@@ -1,7 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  文件池网格卡片。
+
+  ⚠️ 高度必须完全固定：缩略图 104 + 文件名 32 + 内边距 8×2 + 文件名上边距 8 = 160dp。
+  之前文件名是 wrap_content，一行名与两行名会让卡片高矮不一 → GridView 行高抖动 →
+  文件数为奇数时最后一张会贴住上一行（用户报过）。
+  现在卡片等高等宽，行距恒定，与文件数量、名字长短都无关。改这个文件时不要把高度改回 wrap_content。
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
-    android:layout_height="wrap_content"
+    android:layout_height="160dp"
     android:background="@drawable/file_pool_item_background"
     android:gravity="center_horizontal"
     android:orientation="vertical"
@@ -19,7 +27,7 @@
     <TextView
         android:id="@+id/file_name"
         android:layout_width="104dp"
-        android:layout_height="wrap_content"
+        android:layout_height="32dp"
         android:layout_marginTop="8dp"
         android:ellipsize="middle"
         android:gravity="center"

@@ -1,84 +1,305 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!--
+  文件池。
+
+  两条硬约束，改的时候别破坏：
+  1. 底部操作条高度固定 68dp（style=FilePoolActionBar）。管理态 / 选择器态 / 重命名态
+     共用同一高度，切语境时不跳动（用户明确要求三种情况的占用高度相同）。
+  2. 它是"贴设备底部"的 —— file_pool_root 这个 FrameLayout 按 insets 加了内边距，
+     两个子层（主内容 / 重命名面板）都在内边距之内，所以操作条天然落在手势条之上。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/file_pool_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/page_background"
-    android:orientation="vertical"
-    android:padding="20dp">
+    android:background="@color/page_background">
 
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="@string/file_pool_title"
-        android:textColor="@color/text_primary"
-        android:textSize="22sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/file_pool_empty"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="32dp"
-        android:gravity="center"
-        android:lineSpacingExtra="4dp"
-        android:text="@string/file_pool_empty"
-        android:textColor="@color/text_secondary"
-        android:textSize="14sp" />
-
-    <GridView
-        android:id="@+id/file_pool_list"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="12dp"
-        android:layout_weight="1"
-        android:columnWidth="104dp"
-        android:gravity="center"
-        android:horizontalSpacing="10dp"
-        android:numColumns="auto_fit"
-        android:stretchMode="columnWidth"
-        android:verticalSpacing="14dp" />
-
-    <TextView
-        android:id="@+id/file_pool_note"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:lineSpacingExtra="3dp"
-        android:text="@string/file_pool_note"
-        android:textColor="@color/text_tertiary"
-        android:textSize="12sp" />
-
-    <Button
-        android:id="@+id/file_pool_submit"
-        style="@style/ActionButtonPrimary"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:text="@string/file_pool_submit_empty"
-        android:visibility="gone" />
-
+    <!-- ============ 主内容 ============ -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="10dp"
-        android:orientation="horizontal">
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="20dp">
 
-        <Button
-            android:id="@+id/file_pool_import_pdf"
-            style="@style/ActionButtonPrimary"
-            android:layout_width="0dp"
+        <!-- 标题行。多选态下标题与「中转站」标签换成「已选 N 项」 -->
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/file_pool_import_pdf" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <Button
-            android:id="@+id/file_pool_preprocess"
-            style="@style/ActionButtonSecondary"
-            android:layout_width="0dp"
+            <TextView
+                android:id="@+id/file_pool_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/file_pool_title"
+                android:textColor="@color/text_primary"
+                android:textSize="22sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/file_pool_badge"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:background="@drawable/meta_pill_background"
+                android:paddingStart="9dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="9dp"
+                android:paddingBottom="2dp"
+                android:text="@string/file_pool_badge"
+                android:textColor="@color/brand"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/file_pool_selected_count"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_primary"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:id="@+id/file_pool_cancel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/file_pool_pill_background"
+                android:gravity="center"
+                android:paddingStart="14dp"
+                android:paddingTop="7dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="7dp"
+                android:text="@string/file_pool_cancel"
+                android:textColor="@color/text_primary"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <!-- 中转站定位：让"池子非空"这件事一直可见 -->
+        <TextView
+            android:id="@+id/file_pool_pending"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/text_secondary"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:id="@+id/file_pool_toolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/file_pool_import_pdf"
+                style="@style/ActionButtonPrimary"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:text="@string/file_pool_import_pdf" />
+
+            <Button
+                android:id="@+id/file_pool_preprocess"
+                style="@style/ActionButtonSecondary"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="10dp"
+                android:layout_weight="1"
+                android:text="@string/file_pool_preprocess" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/file_pool_empty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            android:gravity="center"
+            android:lineSpacingExtra="4dp"
+            android:text="@string/file_pool_empty"
+            android:textColor="@color/text_secondary"
+            android:textSize="14sp" />
+
+        <GridView
+            android:id="@+id/file_pool_list"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_marginTop="12dp"
             android:layout_weight="1"
-            android:text="@string/file_pool_preprocess" />
+            android:columnWidth="104dp"
+            android:gravity="center"
+            android:horizontalSpacing="10dp"
+            android:numColumns="auto_fit"
+            android:stretchMode="columnWidth"
+            android:verticalSpacing="14dp" />
+
+        <TextView
+            android:id="@+id/file_pool_note"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:lineSpacingExtra="3dp"
+            android:text="@string/file_pool_note"
+            android:textColor="@color/text_tertiary"
+            android:textSize="12sp" />
+
+        <!-- 贴底操作条：三种语境共用同一高度 -->
+        <LinearLayout
+            android:id="@+id/file_pool_actions"
+            style="@style/FilePoolActionBar"
+            android:layout_marginTop="10dp">
+
+            <Button
+                android:id="@+id/file_pool_rename"
+                style="@style/FilePoolActionBarButton"
+                android:text="@string/file_pool_action_rename" />
+
+            <Button
+                android:id="@+id/file_pool_delete"
+                style="@style/FilePoolActionBarButton.Danger"
+                android:layout_marginStart="10dp"
+                android:text="@string/delete" />
+
+            <Button
+                android:id="@+id/file_pool_submit"
+                style="@style/FilePoolActionBarButton.Primary"
+                android:layout_marginStart="10dp"
+                android:text="@string/file_pool_submit_empty"
+                android:visibility="gone" />
+        </LinearLayout>
     </LinearLayout>
-</LinearLayout>
+
+    <!-- ============ 重命名面板（覆盖整页） ============ -->
+    <LinearLayout
+        android:id="@+id/rename_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/page_background"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="20dp"
+            android:paddingEnd="20dp">
+
+            <TextView
+                android:id="@+id/rename_step"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textColor="@color/text_tertiary"
+                android:textSize="13sp" />
+
+            <!-- 动画容器：内容整体左右滑动 + 淡入淡出，见 FilePoolActivity.animateRenameStep() -->
+            <FrameLayout
+                android:id="@+id/rename_stage"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:clipChildren="true">
+
+                <LinearLayout
+                    android:id="@+id/rename_pane"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center_vertical"
+                    android:gravity="center_horizontal"
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:id="@+id/rename_thumb"
+                        android:layout_width="118dp"
+                        android:layout_height="118dp"
+                        android:background="@drawable/file_thumbnail_background"
+                        android:clipToOutline="true"
+                        android:contentDescription="@string/file_preview"
+                        android:scaleType="centerCrop" />
+
+                    <TextView
+                        android:id="@+id/rename_old"
+                        android:layout_width="200dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:ellipsize="middle"
+                        android:gravity="center"
+                        android:maxLines="2"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp"
+                        android:fontFamily="sans-serif-medium" />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginBottom="6dp"
+                        android:text="@string/rename_arrow"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="16sp" />
+
+                    <!-- 新名输入区：宽度与上方旧名一致（都是 200dp），保证上下对称 -->
+                    <EditText
+                        android:id="@+id/rename_new"
+                        android:layout_width="200dp"
+                        android:layout_height="wrap_content"
+                        android:background="@drawable/rename_input_background"
+                        android:gravity="center"
+                        android:inputType="text"
+                        android:maxLines="2"
+                        android:paddingStart="8dp"
+                        android:paddingTop="10dp"
+                        android:paddingEnd="8dp"
+                        android:paddingBottom="10dp"
+                        android:selectAllOnFocus="true"
+                        android:textColor="@color/text_primary"
+                        android:textSize="13sp" />
+
+                    <TextView
+                        android:id="@+id/rename_hint"
+                        android:layout_width="220dp"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:gravity="center"
+                        android:textColor="@color/text_tertiary"
+                        android:textSize="11sp" />
+                </LinearLayout>
+            </FrameLayout>
+
+            <TextView
+                android:id="@+id/rename_meta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:layout_marginBottom="10dp"
+                android:gravity="center"
+                android:textColor="@color/text_tertiary"
+                android:textSize="11sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            style="@style/FilePoolActionBar">
+
+            <Button
+                android:id="@+id/rename_exit"
+                style="@style/FilePoolActionBarButton"
+                android:text="@string/rename_exit" />
+
+            <Button
+                android:id="@+id/rename_confirm"
+                style="@style/FilePoolActionBarButton.Primary"
+                android:layout_marginStart="10dp"
+                android:text="@string/rename_confirm" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>
