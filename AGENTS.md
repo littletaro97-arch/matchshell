@@ -199,7 +199,7 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - 首个正式稳定版使用 `com.hcgy2018.site`；不得重新添加 `.pdf` 后缀。
 - 正式版本从 `1.0.0` / versionCode `100` 起步，后续 versionCode 必须严格递增并保持同一发布证书。
 - versionCode 映射：major×100 + minor×10 + patch（`1.0.0`→100、`1.1.4`→114）。
-  已发布：`1.0.0`/100、`1.1.1`/111、`1.1.2`/112、`1.1.3`/113；当前开发版 `1.1.4`/114。
+  已发布：`1.0.0`/100、`1.1.1`/111、`1.1.2`/112、`1.1.3`/113、`1.1.4`/114。下一版从 `1.1.5`/115 起。
 - ⚠️ **发版时版本号必须严格递增，不要复用已有 tag。** 两个独立原因：
   1. 更新判定要求清单 versionCode `> BuildConfig.VERSION_CODE`（见 `AppUpdateManager.shouldOffer`），
      与已装版本同号 → 那台设备收不到任何更新提示。
