@@ -11,9 +11,9 @@ android {
         applicationId = "com.hcgy2018.site"
         minSdk = 26
         targetSdk = 35
-        // 版本号映射：major*100 + minor*10 + patch，例如 1.0.0 -> 100、1.1.2 -> 112
-        versionCode = providers.gradleProperty("VERSION_CODE").orElse("112").get().toInt()
-        versionName = providers.gradleProperty("VERSION_NAME").orElse("1.1.2").get()
+        // 版本号映射：major*100 + minor*10 + patch，例如 1.0.0 -> 100、1.1.3 -> 113
+        versionCode = providers.gradleProperty("VERSION_CODE").orElse("113").get().toInt()
+        versionName = providers.gradleProperty("VERSION_NAME").orElse("1.1.3").get()
         buildConfigField(
             "String",
             "UPDATE_MANIFEST_URL",

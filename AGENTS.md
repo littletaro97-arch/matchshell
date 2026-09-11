@@ -150,9 +150,11 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 
 ## 已实现的壳能力
 
-- 沉浸式全屏（状态栏/导航栏隐藏，内容延伸至刘海/挖孔/手势区域；在华为/荣耀等 OEM 上额外加 `FLAG_FULLSCREEN` + `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` 兜底）
+- 沉浸式全屏（状态栏/导航栏隐藏，内容延伸至刘海/挖孔区域；在华为/荣耀等 OEM 上额外加 `FLAG_FULLSCREEN` + `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` 兜底）
 - 壳标识：默认 UA 末尾追加 `MatchShell/<版本名>`；JS 桥接提供 `getAppVersion()` / `isMatchShell()`
 - 安全区注入：每个页面在 `<html>` 上写入 `--ms-safe-top/bottom/left/right`（CSS px，取"忽略系统栏可见性"的 insets，含挖孔）
+- 底部兜底：给 WebView 设 `layout_marginBottom` = 底部安全区，缩小 Chromium 视口，使网站贴底固定元素（如预览页翻页底栏）不被手势条压住。
+  起因是网站 `base.html` 的 viewport 缺 `viewport-fit=cover` 导致 `env(safe-area-inset-*)` 恒为 0，网站已有的安全区写法空转；详见 `UPSTREAM_CONTRACT.md`
 - 长按改 URL，支持最近 5 条历史地址（SharedPreferences 持久化）
 - 系统返回键：优先网站 JS 处理器，否则 `webView.goBack()` / `finish()`
 - 同 host 留 WebView，跳 host 用外部浏览器
@@ -188,6 +190,9 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - 从 `0.4.0-pdf` 起只维护 PDF 转换能力，不再继续开发或交付 Lite 变体。
 - 首个正式稳定版使用 `com.hcgy2018.site`；不得重新添加 `.pdf` 后缀。
 - 正式版本从 `1.0.0` / versionCode `100` 起步，后续 versionCode 必须严格递增并保持同一发布证书。
-- versionCode 映射：major×100 + minor×10 + patch（`1.0.0`→100、`1.1.2`→112）。
-  已发布 `1.0.0`/100；当前开发版 `1.1.2`/112（文件池私有化 + PDF 导入入口 + 重连 C+D + 后台下载 + 启动图标深浅色），未发版。
+- versionCode 映射：major×100 + minor×10 + patch（`1.0.0`→100、`1.1.3`→113）。
+  已发布 `1.0.0`/100；当前开发版 `1.1.3`/113（在 1.1.2 的文件池私有化 + PDF 导入入口 + 重连 C+D
+  + 后台下载 + 启动图标深浅色之上，修掉手势条遮挡贴底固定元素的问题），未发版。
+  ⚠️ 发版时 versionCode 必须**严格大于**已存在的所有构建产物：更新判定要求清单 versionCode
+  `> BuildConfig.VERSION_CODE`，与已装 debug 包同号会导致该设备收不到更新提示。
 - 稳定发布通过 `.github/workflows/release.yml` 手动触发；真机更新链未验收前不得创建稳定 Release。

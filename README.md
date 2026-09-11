@@ -6,7 +6,7 @@
 - 正式包名 `com.hcgy2018.site`
 - minSdk 26（Android 8.0）／targetSdk 35
 - 已发布稳定版：`1.0.0` / versionCode `100`（GitHub Release `v1.0.0`）
-- 开发中版本：`1.1.2` / versionCode `112`（未发版，见 `dist/matchshell-v1.1.2-pdf-arm64-debug.apk`）
+- 开发中版本：`1.1.3` / versionCode `113`（未发版，见 `dist/matchshell-v1.1.3-pdf-arm64-debug.apk`）
 - 版本号映射：major×100 + minor×10 + patch；只维护 PDF 转换变体
 - UI 仍保持无 appcompat；资源预处理使用 AndroidX ExifInterface 与 Media3 Transformer
 - 默认打开 `https://hcgy2018.site/`（在 `res/values/strings.xml` 里改）
@@ -115,15 +115,21 @@ window.onMatchShellBack = function() {
 
 另外，壳会在每个页面的 `<html>` 上写入安全区变量（单位 CSS px，随旋转/挖孔变化自动更新）：
 
-```css
-.bottom-nav {
-    padding-bottom: calc(12px + var(--ms-safe-bottom, 0px));
-}
-```
-
 可用变量：`--ms-safe-top` / `--ms-safe-bottom` / `--ms-safe-left` / `--ms-safe-right`。
 取值为"忽略系统栏可见性"的 insets，所以用户临时滑出系统栏时底部条不会跟着跳动。
-壳是全屏沉浸式，手势条区域常驻，底部固定元素必须避让，否则会被手势条压住。
+
+**底部避让已由壳在视口层兜底，网站不要再对底部加内边距。**
+
+壳会给 WebView 留出等于底部安全区的高度，网站视口底边本身就在手势条之上，
+贴底固定元素（如预览页翻页底栏）天然不会被压住。网站侧若再补
+`padding-bottom: calc(12px + var(--ms-safe-bottom, 0px))` 会叠加成双重内边距。
+
+网站现有的 `env(safe-area-inset-*)` 写法目前没生效，原因是
+`base.html` 的 viewport 没有声明 `viewport-fit=cover`——按 CSS 规范此时 `env()` 恒为 0。
+所以**不要**为了修遮挡去加 `viewport-fit=cover`，那会和壳的兜底打架。详见 [UPSTREAM_CONTRACT.md](UPSTREAM_CONTRACT.md)。
+
+顶部与左右壳不留白（内容延伸至刘海是有意的观感选择），
+`--ms-safe-top` / `-left` / `-right` 仍可供网站自行处理刘海与侧边挖孔。
 
 ## 为什么不用 PWA
 
@@ -145,8 +151,9 @@ manifest 不生效，装不上，也就没有 standalone 全屏。调试主要�
    WebView 的滚动位置和页面状态不丢。
 6. **远程调试** — `BuildConfig.DEBUG` 下开 `WebView.setWebContentsDebuggingEnabled(true)`，
    电脑上打开 `chrome://inspect` 就能审查手机里的页面元素。
-7. **系统栏遮挡** — 默认隐藏状态栏和导航栏，内容延伸至刘海/挖孔/手势区域；
-   只调整右上角刷新按钮的边距，避免被状态栏/刘海压住。
+7. **系统栏遮挡** — 默认隐藏状态栏和导航栏，内容延伸至刘海/挖孔区域；
+   右上角刷新按钮按状态栏/刘海高度动态下调边距；
+   底部相反——给 WebView 留出等于底部安全区的高度，让网站的贴底固定元素不被手势条压住。
 8. **加载白屏** — 主文档 15 秒未完成视为超时，按错误码给出具体提示。
    重试策略见下节「重连策略」：不做定时重试，只在网络恢复时最多自动重试一次。
 9. **本地调试硬编码链接** — 页面内写死的 `https://hcgy2018.site/...` 链接，
