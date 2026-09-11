@@ -189,13 +189,14 @@ class AppUpdateManager(
             append(activity.getString(R.string.update_available_message, info.versionName, readableSize(info.size)))
             if (info.releaseNotes.isNotBlank()) append("\n\n").append(info.releaseNotes)
         }
-        AlertDialog.Builder(activity)
+        dialogBuilder(activity)
             .setTitle(R.string.update_available_title)
             .setMessage(message)
             .setPositiveButton(R.string.update_now) { _, _ -> startBackgroundDownload(info) }
             .apply { if (!forced) setNegativeButton(R.string.update_later, null) }
             .setCancelable(!forced)
             .show()
+            .roundCorners()
     }
 
     /** 交给系统下载器在后台下载；这里只负责入队和记账，不阻塞界面。 */
@@ -286,13 +287,14 @@ class AppUpdateManager(
             max = 100
             setPadding(48, 24, 48, 24)
         }
-        progressDialog = AlertDialog.Builder(activity)
+        progressDialog = dialogBuilder(activity)
             .setTitle(R.string.update_downloading)
             .setView(bar)
             .setPositiveButton(R.string.update_download_hide, null)
             .setNegativeButton(R.string.update_download_cancel) { _, _ -> cancelDownload(task) }
             .setOnDismissListener { stopProgressUpdates() }
             .show()
+            .roundCorners()
         // 面板关掉不中断下载，只是不再刷新进度
         val tick = object : Runnable {
             override fun run() {
@@ -372,13 +374,14 @@ class AppUpdateManager(
             }
             result.onSuccess {
                 clearTask()
-                AlertDialog.Builder(activity)
+                dialogBuilder(activity)
                     .setTitle(R.string.update_ready_title)
                     .setMessage(activity.getString(R.string.update_ready_message, task.versionName))
                     .setPositiveButton(R.string.update_install_now) { _, _ -> beginInstall(apk) }
                     .setNegativeButton(R.string.update_install_later) { _, _ -> apk.delete() }
                     .setCancelable(false)
                     .show()
+                    .roundCorners()
             }.onFailure {
                 apk.delete()
                 clearTask()

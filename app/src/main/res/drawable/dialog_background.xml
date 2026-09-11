@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  弹窗统一背景：22dp 圆角白面。
+  平台 AlertDialog 自带的是直角背景，全站其余组件都是圆角，这里是把它对齐过来。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#FFFFFF" />
+    <corners android:radius="22dp" />
+</shape>

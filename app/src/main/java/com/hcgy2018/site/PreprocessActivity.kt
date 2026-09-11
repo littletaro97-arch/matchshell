@@ -230,8 +230,11 @@ class PreprocessActivity : ComponentActivity() {
             return
         }
         if (!DocumentPdfConverter.isAvailable) {
-            AlertDialog.Builder(this).setTitle(R.string.office_convert)
-                .setMessage(R.string.office_engine_missing).setPositiveButton(android.R.string.ok, null).show()
+            dialogBuilder(this).setTitle(R.string.office_convert)
+                .setMessage(R.string.office_engine_missing)
+                .setPositiveButton(android.R.string.ok, null)
+                .show()
+                .roundCorners()
             return
         }
         if (suffix !in OFFICE_SUFFIXES) {

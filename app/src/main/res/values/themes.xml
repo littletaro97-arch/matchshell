@@ -70,4 +70,57 @@
         <item name="android:orientation">vertical</item>
         <item name="android:gravity">center_horizontal</item>
     </style>
+
+    <!--
+      弹窗统一圆角（长期规范，2026-09-11 起）。
+      平台 AlertDialog 默认画的是直角背景，这里把窗口背景换成 22dp 圆角白面。
+      调用侧一律用 AlertDialog.Builder(context, R.style.Theme_MatchShell_Dialog)，
+      并在 show() 之后调 Dialog.roundCorners() 兜底（平台某些版本会在内部分区再画一层背景）。
+    -->
+    <style name="Theme.MatchShell.Dialog" parent="@android:style/Theme.Material.Light.Dialog.Alert">
+        <item name="android:windowBackground">@drawable/dialog_background</item>
+        <item name="android:backgroundDimAmount">0.42</item>
+        <item name="android:colorAccent">@color/brand</item>
+    </style>
+
+    <!--
+      文件池贴底操作条：管理态 / 选择器态 / 重命名态共用同一高度，
+      切语境时几何不变（用户明确要求三种情况的占用高度相同）。
+      68 = 44 按钮 + 上下各 12。
+    -->
+    <style name="FilePoolActionBar">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">68dp</item>
+        <item name="android:background">@color/card_background</item>
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:paddingStart">14dp</item>
+        <item name="android:paddingEnd">14dp</item>
+    </style>
+
+    <style name="FilePoolActionBarButton">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:background">@drawable/button_secondary_background</item>
+        <item name="android:textColor">@color/text_primary</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:stateListAnimator">@null</item>
+        <item name="android:paddingStart">4dp</item>
+        <item name="android:paddingEnd">4dp</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <style name="FilePoolActionBarButton.Danger">
+        <item name="android:background">@drawable/button_danger_background</item>
+        <item name="android:textColor">@android:color/white</item>
+    </style>
+
+    <style name="FilePoolActionBarButton.Primary">
+        <item name="android:background">@drawable/button_primary_background</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:layout_weight">1.6</item>
+    </style>
 </resources>

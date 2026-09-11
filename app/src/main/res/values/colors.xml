@@ -14,4 +14,7 @@
 
     <!-- Brand color at 10% opacity, used for icon backgrounds and subtle accents -->
     <color name="brand_10">#1AA65E44</color>
+
+    <!-- 危险/报错色（与网站侧的 danger 变量同色）。用于删除主按钮、重名提示、危险描边 -->
+    <color name="danger">#A92F24</color>
 </resources>
