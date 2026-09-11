@@ -7,8 +7,8 @@
 - minSdk 26（Android 8.0）／targetSdk 35
 - 已发布稳定版：`1.1.3` / versionCode `113`（GitHub Release `v1.1.3`）
 - 已发布历史：`1.0.0`/100、`1.1.1`/111、`1.1.2`/112
-- 本地构建产物：`dist/matchshell-v1.1.3-pdf-arm64-debug.apk`
-  （debug 签名，与发布包证书不同，**不能覆盖安装**，需先卸载）
+- 开发中版本：`1.1.4` / versionCode `114`（未发版，产物 `dist/matchshell-v1.1.4-pdf-arm64-debug.apk`）
+  - debug 签名，与发布包证书不同，**不能覆盖安装**，需先卸载
 - 版本号映射：major×100 + minor×10 + patch；只维护 PDF 转换变体
 - UI 仍保持无 appcompat；资源预处理使用 AndroidX ExifInterface 与 Media3 Transformer
 - 默认打开 `https://hcgy2018.site/`（在 `res/values/strings.xml` 里改）
@@ -120,15 +120,19 @@ window.onMatchShellBack = function() {
 可用变量：`--ms-safe-top` / `--ms-safe-bottom` / `--ms-safe-left` / `--ms-safe-right`。
 取值为"忽略系统栏可见性"的 insets，所以用户临时滑出系统栏时底部条不会跟着跳动。
 
-**底部避让已由壳在视口层兜底，网站不要再对底部加内边距。**
+**底部避让由壳注入 CSS 兜底，网站不要再对底部加内边距。**
 
-壳会给 WebView 留出等于底部安全区的高度，网站视口底边本身就在手势条之上，
-贴底固定元素（如预览页翻页底栏）天然不会被压住。网站侧若再补
-`padding-bottom: calc(12px + var(--ms-safe-bottom, 0px))` 会叠加成双重内边距。
+壳会在页面加载后注入一段样式，把网站已有的贴底固定元素
+（预览页翻页底栏 `.guest-document-preview__controls`、资源浏览底栏 `.browser-preview__pager`、
+通知浮层 `.notification-toast-region`）用 `max(网站变量, var(--ms-safe-bottom))` 抬到手势条之上。
+
+**不给 WebView 留白**：1.1.3 试过给 WebView 设底部边距，但那个值取自「忽略系统栏可见性」的 insets
+—— 导航条隐藏时它照样返回导航条高度，底部被永久占掉约 48dp，**边到边全屏失效**。1.1.4 已回滚。
 
 网站现有的 `env(safe-area-inset-*)` 写法目前没生效，原因是
 `base.html` 的 viewport 没有声明 `viewport-fit=cover`——按 CSS 规范此时 `env()` 恒为 0。
-所以**不要**为了修遮挡去加 `viewport-fit=cover`，那会和壳的兜底打架。详见 [UPSTREAM_CONTRACT.md](UPSTREAM_CONTRACT.md)。
+所以**不要**为了修遮挡去加 `viewport-fit=cover`，那会和壳的注入打架。
+完整清单与约束见 [UPSTREAM_CONTRACT.md](UPSTREAM_CONTRACT.md)。
 
 顶部与左右壳不留白（内容延伸至刘海是有意的观感选择），
 `--ms-safe-top` / `-left` / `-right` 仍可供网站自行处理刘海与侧边挖孔。
@@ -155,7 +159,7 @@ manifest 不生效，装不上，也就没有 standalone 全屏。调试主要�
    电脑上打开 `chrome://inspect` 就能审查手机里的页面元素。
 7. **系统栏遮挡** — 默认隐藏状态栏和导航栏，内容延伸至刘海/挖孔区域；
    右上角刷新按钮按状态栏/刘海高度动态下调边距；
-   底部相反——给 WebView 留出等于底部安全区的高度，让网站的贴底固定元素不被手势条压住。
+   底部改为注入 CSS 抬高网站的贴底固定元素，**视口不动、全屏不受影响**。
 8. **加载白屏** — 主文档 15 秒未完成视为超时，按错误码给出具体提示。
    重试策略见下节「重连策略」：不做定时重试，只在网络恢复时最多自动重试一次。
 9. **本地调试硬编码链接** — 页面内写死的 `https://hcgy2018.site/...` 链接，

@@ -153,8 +153,16 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - 沉浸式全屏（状态栏/导航栏隐藏，内容延伸至刘海/挖孔区域；在华为/荣耀等 OEM 上额外加 `FLAG_FULLSCREEN` + `LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES` 兜底）
 - 壳标识：默认 UA 末尾追加 `MatchShell/<版本名>`；JS 桥接提供 `getAppVersion()` / `isMatchShell()`
 - 安全区注入：每个页面在 `<html>` 上写入 `--ms-safe-top/bottom/left/right`（CSS px，取"忽略系统栏可见性"的 insets，含挖孔）
-- 底部兜底：给 WebView 设 `layout_marginBottom` = 底部安全区，缩小 Chromium 视口，使网站贴底固定元素（如预览页翻页底栏）不被手势条压住。
-  起因是网站 `base.html` 的 viewport 缺 `viewport-fit=cover` 导致 `env(safe-area-inset-*)` 恒为 0，网站已有的安全区写法空转；详见 `UPSTREAM_CONTRACT.md`
+- 底部避让：页面加载后注入 CSS，把网站已存在的贴底固定元素（预览翻页底栏、资源浏览底栏、通知浮层）
+  用 `max(网站变量, var(--ms-safe-bottom))` 抬到手势条之上。
+  **不给 WebView 留白** —— 1.1.3 试过 `layout_marginBottom = 底部安全区`，但那个值取自
+  `getInsetsIgnoringVisibility()`：导航条隐藏时它照样返回导航条高度，底部被永久占掉约 48dp，
+  边到边全屏失效，1.1.4 已回滚。选择器清单见 `UPSTREAM_CONTRACT.md`
+- 上传完成检测：注入脚本钩住 `window.fetch`，命中网站分片上传的收尾请求 `POST …/complete/` 且成功
+  → 去抖 1.5s → 询问是否把已提交的文件从文件池删掉。JS 桥接同时暴露 `onUploadComplete()`
+  供网站将来主动调用（网站侧目前未实现任何契约）
+- 弹窗统一圆角：`dialogBuilder()` + `AlertDialog.roundCorners()`（`Dialogs.kt`），
+  22dp 圆角白面，见 `Theme.MatchShell.Dialog`
 - 长按改 URL，支持最近 5 条历史地址（SharedPreferences 持久化）
 - 系统返回键：优先网站 JS 处理器，否则 `webView.goBack()` / `finish()`
 - 同 host 留 WebView，跳 host 用外部浏览器
@@ -190,8 +198,8 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
 - 从 `0.4.0-pdf` 起只维护 PDF 转换能力，不再继续开发或交付 Lite 变体。
 - 首个正式稳定版使用 `com.hcgy2018.site`；不得重新添加 `.pdf` 后缀。
 - 正式版本从 `1.0.0` / versionCode `100` 起步，后续 versionCode 必须严格递增并保持同一发布证书。
-- versionCode 映射：major×100 + minor×10 + patch（`1.0.0`→100、`1.1.3`→113）。
-  已发布：`1.0.0`/100、`1.1.1`/111、`1.1.2`/112、`1.1.3`/113。
+- versionCode 映射：major×100 + minor×10 + patch（`1.0.0`→100、`1.1.4`→114）。
+  已发布：`1.0.0`/100、`1.1.1`/111、`1.1.2`/112、`1.1.3`/113；当前开发版 `1.1.4`/114。
 - ⚠️ **发版时版本号必须严格递增，不要复用已有 tag。** 两个独立原因：
   1. 更新判定要求清单 versionCode `> BuildConfig.VERSION_CODE`（见 `AppUpdateManager.shouldOffer`），
      与已装版本同号 → 那台设备收不到任何更新提示。
@@ -199,3 +207,52 @@ ADB="C:/Users/LittleTaro/AppData/Local/Android/Sdk/platform-tools/adb.exe"
      再据此算 sha256）。复用 tag 会让清单指向**没有本次改动的旧 APK**，且不会报错——
      属于静默失败，必须靠递增版本号规避。
 - 稳定发布通过 `.github/workflows/release.yml` 手动触发；真机更新链未验收前不得创建稳定 Release。
+
+# UI 与交互规范（长期，2026-09-11 用户确立）
+
+改 UI 时按这套来，不要另造风格。
+
+## 弹窗
+
+- **一律圆角 22dp**：白面、内边距 20dp、按钮右对齐间距 22dp。
+  平台 `AlertDialog` 默认画的是直角，必须走 `Dialogs.kt` 的 `dialogBuilder()` +
+  `show().roundCorners()`，不要再直接 `AlertDialog.Builder(context)`。
+- 危险动作（删除）主按钮用 `@color/danger`（`#A92F24`，与网站侧同色）；确认类动作用品牌色。
+- ⚠️ 圆角是否覆盖干净（四角会不会残留平台自己的边距）**必须真机看一眼**，模拟里验不了。
+
+## 文件池
+
+- **定位是"中转站"，不是存档处。** 不允许出现暗示长期保存的文案
+  （历史上有过"需要长期保留请另行备份"，已删）。可保留的事实：私有目录、不进相册、卸载即清。
+  **不做自动过期 / 自动清理** —— "要么上传要么删除"是用户的选择，壳只提示不代劳。
+- **网格卡片必须等高**：缩略图固定 104dp + 文件名固定 32dp（两行）→ 卡片固定 160dp。
+  改回 `wrap_content` 会让行高随文件名长短抖动，文件数为奇数时末行会贴住上一行（用户报过这个 bug）。
+- **贴底操作条高度固定 68dp**（44 按钮 + 上下各 12），管理态 / 选择器态 / 重命名态共用，
+  切语境时不得跳动。位置贴设备底部，靠 `file_pool_root` 的 insets 内边距避开手势条。
+- 交互模型：**长按进多选**（不再是"长按直接删"）。多选态底部给「重命名 / 删除」；
+  从网页上传拉起时（pickerMode）再多一个「提交已选」。删除需二次确认。
+- 重命名：逐个文件走，**确认即落盘**（所以中途退出不会白干）；重名**不自动加序号**，
+  直接拦住让用户改（与导入时的 `uniqueTarget()` 行为刻意相反）。
+
+## 动效
+
+- 短、有目的、ease-out、无回弹。参考值 **220ms + `cubic-bezier(.23,1,.32,1)`**，位移 28dp。
+- 重命名步骤切换：整体面板滑动 + 淡入淡出；顶部标签与底部操作条不动（避免整屏都在晃）。
+- **先落盘成功再播动画** —— 反过来的话会出现"动画走了但其实没改成"。
+- 尊重系统「减少动画」：`Settings.Global.ANIMATOR_DURATION_SCALE == 0` 时退化为直接切换。
+
+## 视觉 token（沿用，不要另造数字）
+
+- 色：页面底 `#F5EFE6` / 卡片 `#E8E4DA` / 按下 `#DDD9CF` / 品牌 `#A65E44` / 危险 `#A92F24`
+  / 正文 `#2D2A26` / 次要 `#6B655D` / 三级 `#8A837A`
+- 圆角：卡片 20 · 缩略图 12 · 按钮 16 · 弹窗 22 · pill 999
+- 触摸目标下限 44dp
+
+## 缩略图
+
+- 统一走 `ThumbnailStore`（内存 LRU + 磁盘缓存，键 = 文件名|大小|修改时间），
+  不要在适配器里直接解码；`cacheKey` 同时被缩略图缓存和"已提交文件"追踪复用。
+- 视频抽帧用 `MediaMetadataRetriever`，并受 `Semaphore(1)` 串行保护
+  —— 它很吃内存，并发解多个视频在低端机上容易 OOM。
+- 图片解码：API 29+ 用 `ContentResolver.loadThumbnail`，低版本自己按 `inSampleSize` 解 + 按 EXIF 转正
+  （`loadThumbnail` 是 API 29 才有的，minSdk 26 上直接叫会抛）。
