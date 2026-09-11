@@ -28,18 +28,43 @@ MatchShell 是火柴公益网站的独立 Android WebView 承载端，不是网�
 - 每次联调记录 APK SHA-256、网站版本/commit、设备、WebView provider 版本和首页/资源页/登录/上传下载结果。
 - APK 本地构建与网站自动化不等于设备验收，也不授权服务器部署或 Release。
 
-## 壳标识与安全区约定（2026-09-10 起）
+## 壳标识与安全区约定（2026-09-10 起，2026-09-11 修订）
 
-网站如需为壳渲染 APP 模式，按下面两条契约对接，不需要 MatchShell 再改代码：
+网站如需为壳渲染 APP 模式，按下面两条契约对接：
 
-1. **判定是否在壳内**：请求 UA 末尾是否含 `MatchShell/<版本名>`（如 `MatchShell/1.0.0`）。
+1. **判定是否在壳内**：请求 UA 末尾是否含 `MatchShell/<版本名>`（如 `MatchShell/1.1.2`）。
    服务端读到即可在模板输出 `data-app-mode`，首屏生效、不依赖 JS。
    客户端也可用 `typeof window.MatchShell !== "undefined"` 判断。
-2. **避让手势条**：壳会在每个页面的 `<html>` 上写入 `--ms-safe-top` / `--ms-safe-bottom` /
+2. **安全区变量**：壳会在每个页面的 `<html>` 上写入 `--ms-safe-top` / `--ms-safe-bottom` /
    `--ms-safe-left` / `--ms-safe-right`（CSS px，随旋转和挖孔自动更新）。
-   底部固定元素用 `calc(基准值 + var(--ms-safe-bottom, 0px))` 做下边距，否则会被手势条压住。
+
+### ⚠️ 底部避让已由壳在视口层兜底，网站不要再对底部加内边距
+
+壳会给 WebView 留出等于底部安全区的高度，网站视口底边本身就落在手势条之上，
+贴底固定元素（如预览页翻页底栏）天然不会被压住。
+
+这样做的原因是网站侧一个既有问题：`src/templates/base.html` 的 viewport
+未声明 `viewport-fit=cover`，按 CSS 规范此时 `env(safe-area-inset-*)` **恒为 0**，
+所以网站 `resource-preview-layout.css` / `resource-browser-preview.css` /
+`notifications.css` 里已有的安全区写法目前实际是空转的。
+
+因此：
+
+- 网站**不要**再补 `viewport-fit=cover`，也**不要**对底部再加 `padding-bottom`
+  （无论用 `env(safe-area-inset-bottom)` 还是 `--ms-safe-bottom`）——
+  会与壳的兜底叠加成双重内边距。
+- 网站**可以**继续用 `--ms-safe-top` / `-left` / `-right` 处理刘海与侧边挖孔：
+  壳在顶部与左右**不**留白，全屏内容延伸至刘海区域是有意的观感选择。
+- 若某页面仍出现"底部内容被手势条盖住"，先记录设备型号与复现路径，
+  在**壳侧**调整兜底策略，不要在网站侧临时加内边距。
 
 以上变量与 UA token 由壳单向提供给网站；网站不得假设壳会读取任何页面 DOM 或 Cookie 来反向判断。
+
+### 两侧契约副本的同步状态
+
+上游权威副本 `E:\火柴公益官网建设-全新架构\docs\contracts\matchshell-carrier-contract-v1.md`
+仍是 2026-09-05 的 v1，**尚未包含本节的壳标识与安全区约定**（网站侧因此没有实现 APP 模式渲染）。
+按本节开头第 1 条对接前，先把本节同步到上游副本。
 
 ## 上游变更处理
 

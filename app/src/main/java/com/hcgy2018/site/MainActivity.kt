@@ -305,7 +305,8 @@ class MainActivity : ComponentActivity() {
         }
 
         // 只拿 insets 来调整 reload_fab 的边距，避免被状态栏/刘海压住。
-        // 不再给根容器加 padding：全屏模式下网站内容应延伸至刘海/挖孔/手势区域。
+        // 顶部仍不给根容器加 padding：全屏模式下网站内容延伸至刘海/挖孔是刻意的观感选择。
+        // 底部例外，见 applyBottomClearance()。
         val root = findViewById<View>(android.R.id.content)
         ViewCompat.setOnApplyWindowInsetsListener(root) { _, insets ->
             val bars = insets.getInsets(
@@ -321,9 +322,31 @@ class MainActivity : ComponentActivity() {
                 WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
             )
             updateSafeArea(stable.top, stable.bottom, stable.left, stable.right)
+            applyBottomClearance(stable.bottom)
             insets
         }
         ViewCompat.requestApplyInsets(root)
+    }
+
+    /**
+     * 把底部安全区从 WebView 视口里扣掉，让网站的贴底固定元素自然抬起。
+     *
+     * 网站侧本来用 `env(safe-area-inset-bottom)` 避让手势条，但 `base.html` 的 viewport
+     * 没有声明 `viewport-fit=cover`，按 CSS 规范此时 `env()` 恒为 0
+     * —— 也就是网站那些避让代码目前是空转的（预览页翻页底栏只剩 7px 底距，被手势条压住）。
+     *
+     * 壳不改网站，改为在视口层面兜底：缩小 WebView 自身高度，Chromium 的布局视口随之变矮，
+     * 而 `position: fixed` 正是以视口为包含块，所以贴底固定元素会整体上移。
+     * 用 layout_marginBottom 而不是 padding：边距在 View 层就直接把 WebView 量小，
+     * 不依赖 WebView 对 padding 的内部处理，行为确定。
+     * 让出的那条露出根容器底色（@color/page_background，与网站 --paper 几乎同色）。
+     *
+     * 只在数值变化时写入：insets 回调触发频繁，重复设置会引起无谓重排。
+     */
+    private fun applyBottomClearance(bottomPx: Int) {
+        val params = web.layoutParams as? FrameLayout.LayoutParams ?: return
+        if (params.bottomMargin == bottomPx) return
+        web.updateLayoutParams<FrameLayout.LayoutParams> { bottomMargin = bottomPx }
     }
 
     /**
