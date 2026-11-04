@@ -1,5 +1,19 @@
 # MatchShell — 火柴公益全屏调试壳
 
+> **项目已结束维护（2026-11-04）。最终版本为 v1.1.4，不再更新。**
+> 现有源码和安装包保留供使用与参考，不再承诺后续功能、修复或系统兼容性更新。
+
+## 下载最终版本
+
+- **[直接下载 v1.1.4 APK](https://github.com/littletaro97-arch/matchshell/releases/download/v1.1.4/matchshell-v1.1.4-arm64.apk)**
+- [查看最终 Release 与版本说明](https://github.com/littletaro97-arch/matchshell/releases/tag/v1.1.4) · [Latest Release](https://github.com/littletaro97-arch/matchshell/releases/latest)
+- 安装包：`matchshell-v1.1.4-arm64.apk`；versionCode：`114`。
+- 请在 Release 的 **Assets** 中选择 `.apk`，不要下载自动生成的 Source code 压缩包来安装。
+
+需要 Android 8.0 或更高版本及 arm64-v8a 设备。请下载现有正式 APK，不要下载源码 ZIP 当作安装包。Debug 证书或旧 `.pdf` 包名的测试包不能作为同一正式应用直接覆盖升级；卸载前先处理文件池中的文件。
+
+完整的完成范围、已知限制和保留说明见 **[项目收尾总结](PROJECT_CLOSEOUT.md)**。
+
 一个只有 WebView 的 Android 壳，用于在手机上全屏查看火柴公益网站（去掉浏览器地址栏/工具栏），
 方便移动端 debug。不是给外部用户用的产品，是开发者的查看器。
 
@@ -7,7 +21,7 @@
 - minSdk 26（Android 8.0）／targetSdk 35
 - 已发布稳定版：`1.1.4` / versionCode `114`（GitHub Release `v1.1.4`）
 - 已发布历史：`1.0.0`/100、`1.1.1`/111、`1.1.2`/112、`1.1.3`/113
-- 下一版从 `1.1.5` / versionCode `115` 起
+- 项目已停更，最终版固定为 `1.1.4` / versionCode `114`，不再规划下一版
 - 本地构建产物：`dist/matchshell-v1.1.4-pdf-arm64-debug.apk`
   - debug 签名，与发布包证书不同，**不能覆盖安装**，需先卸载
 - 版本号映射：major×100 + minor×10 + patch；只维护 PDF 转换变体
@@ -51,7 +65,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 - 照片：校正 EXIF 旋转，最长边限制为 1920 px，导出 JPEG（质量 82）。
 - 视频：使用 Android 官方 Media3 Transformer 转为 720p H.264/AAC MP4，支持进度与取消。
-- PPT 转 PDF：入口仅说明能力边界，尚未实现。网站依赖 Windows LibreOffice `soffice`，不能直接打入 Android APK；需独立验证可信的 Android 文档渲染方案。
+- Office 转 PDF：最终 PDF 变体已集成 arm64 端侧 DOCX/PPTX/XLSX 转换；不是将 Windows LibreOffice `soffice` 打入 Android APK，复杂排版仍有兼容性限制。
 - 输出自动写入 **APP 私有目录**（`Android/data/com.hcgy2018.site/files/Download/火柴公益文件池/`）；
   中间文件位于 APP 缓存，完成或取消后清理。
 - **网页上传只认文件池**：文件选择器直接进入文件池，不再提供"浏览其他文件"入口；
@@ -62,7 +76,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ### v1.0.0 PDF 转换版
 
-- 后续只维护 PDF 转换版：包含照片/视频压缩、文件池网格缩略图、长按删除及 arm64 端侧 DOCX/PPTX/XLSX→PDF。
+- 最终保留 PDF 转换版：包含照片/视频压缩、文件池网格缩略图、长按删除及 arm64 端侧 DOCX/PPTX/XLSX→PDF。
 - 资源预处理页采用 WorkBuddy HTML 原型的暖米色卡片布局，卡片和“前往文件池”均已连接现有原生功能。
 - PDF 转换引擎来自 Apache-2.0 `office2pdf` 的 Android JNI 构建；输入上限 64 MiB，复杂排版属于待实机验证范围。
 
@@ -72,7 +86,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 - 启动 3 秒后后台检查，每 24 小时最多自动检查一次；右上角菜单可手动“检查更新”。
 - 更新清单：`https://littletaro97-arch.github.io/matchshell/updates/stable.json`。
-- APK 从 Gitee Releases 下载，GitHub Release 保留同一产物作为归档；下载后校验清单 RSA 签名、APK SHA-256、包名、versionCode 和签名证书。
+- APK 下载地址由签名清单决定；仓库当前发布工作流生成 GitHub Release 地址。下载后校验清单 RSA 签名、APK SHA-256、包名、versionCode 和签名证书。线上清单当前内容未在本次收尾中验证。
 - Android 8+ 首次更新需要允许本 APP 安装未知来源，安装动作仍由系统确认。
 - 发布步骤和 GitHub Secrets 见 [docs/github-update-release.md](docs/github-update-release.md)。
 
@@ -188,7 +202,6 @@ if MATCH_SITE_HTTPS:
 - **网站维护入口**：当前为 `E:\火柴公益官网建设-全新架构`；双击其中 `启动手机联调.bat`，使用窗口显示的网址。旧 `.worktrees/v0.8.13.2.1` 仅作为迁移来源保留只读。
   本工程不依赖任何版本目录，只依赖一个 URL，所以不污染项目的只读版本线和 worktree。
 
-## 发布前必须改
+## 网络配置
 
-`AndroidManifest.xml` 里的 `android:usesCleartextTraffic="true"` 是为局域网 HTTP 调试开的。
-要公开发布就删掉它，或改成 `network_security_config.xml` 限定域名。
+当前 `AndroidManifest.xml` 通过 `${usesCleartextTraffic}` 区分构建类型，并使用 `network_security_config.xml`：Gradle 中 Debug 为 `true`，Release 为 `false`。不要把历史 Debug 配置误当作最终 Release 的明文网络策略。
